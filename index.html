@@ -267,9 +267,50 @@
             line-height: 1;
         }
 
-        .pending-bar { 
-            width: 100%; 
-            height: 105px; 
+        /* ------------------------------------------------------------
+           加工用キャンバスは 1200x1200 の正方形なので、作業スペースが
+           横長だと高さで頭打ちになり、横に大きな余りが出る。
+           余りが十分ある時は未完了バーを横に逃がして、その分の高さを
+           キャンバスに回す。
+           ------------------------------------------------------------ */
+        .work-area {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+            min-height: 0;
+            min-width: 0;
+        }
+        .work-area > .canvas-container { flex: 1 1 auto; min-height: 0; min-width: 0; }
+
+        /* 横並びモード */
+        .work-area.side-strip { flex-direction: row; }
+        .work-area.side-strip > .pending-bar {
+            width: 124px;
+            height: auto;
+            margin-top: 0;
+            flex: 0 0 124px;
+        }
+        .work-area.side-strip .pending-header { flex-direction: column; align-items: flex-start; gap: 3px; }
+        .work-area.side-strip .pending-list { flex-direction: column; overflow-x: hidden; overflow-y: auto; align-items: flex-start; }
+        .work-area.side-strip #pendingHelpText { display: none !important; }
+        .work-area.side-strip #pendingBatchTools { flex-direction: column; align-items: stretch; width: 100%; }
+
+        /* 折りたたみ */
+        .pending-bar.collapsed { height: auto !important; flex: 0 0 auto !important; }
+        .pending-bar.collapsed .pending-list { display: none; }
+        .work-area.side-strip > .pending-bar.collapsed { width: auto; flex: 0 0 auto; }
+        #pendingToggleBtn {
+            background: var(--bg-control); color: var(--text-main); border: none;
+            border-radius: 3px; padding: 0 4px; font-size: 10px; line-height: 1.4;
+            cursor: pointer; margin-right: 2px;
+        }
+        #pendingToggleBtn:hover { background: #007bff; color: #fff; }
+
+        .pending-bar {
+            width: 100%;
+            height: 105px;
             background: var(--bg-subpanel); 
             border-radius: 6px; 
             margin-top: 6px; 
@@ -288,9 +329,13 @@
         .pending-item.bulk-selected { border-color: #ff9800 !important; box-shadow: 0 0 8px rgba(255,152,0,0.8); }
         .pending-item img { width: 100%; height: 100%; object-fit: cover; }
         .pending-item .title { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0, 0, 0, 0.75); color: #fff; font-size: 9px; padding: 1px 3px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
-        .pending-item .pending-rename { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0; font-size: 9px; line-height: 1; border: none; border-radius: 3px; background: rgba(0,0,0,0.6); color: #fff; cursor: pointer; opacity: 0; transition: opacity 0.15s, background 0.15s; }
-        .pending-item:hover .pending-rename { opacity: 1; }
+        /* 常時表示にしている。hover で出す方式だとタッチ操作では存在に気づけないため。 */
+        .pending-item .pending-btn { position: absolute; top: 2px; width: 19px; height: 19px; padding: 0; font-size: 10px; line-height: 1; border: none; border-radius: 3px; background: rgba(0,0,0,0.72); color: #fff; cursor: pointer; opacity: 0.85; transition: opacity 0.15s, background 0.15s; }
+        .pending-item:hover .pending-btn { opacity: 1; }
+        .pending-item .pending-rename { right: 2px; }
         .pending-item .pending-rename:hover { background: #ff9800; }
+        .pending-item .pending-delete { left: 2px; }
+        .pending-item .pending-delete:hover { background: #dc3545; }
         .pending-item.named .title { background: rgba(255,152,0,0.85); font-weight: bold; }
 
         .pending-select-box {
@@ -441,6 +486,8 @@
                 <button id="undoBtn" class="btn-secondary" disabled>戻す (Ctrl+Z)</button>
             </div>
 
+            <!-- キャンバスと未完了バーをまとめる。横幅が余っている時は横並びに切り替える -->
+            <div class="work-area" id="workArea">
             <div class="canvas-container" id="dropArea">
                 <div id="compareBadge">BEFORE (元画像)</div>
                 <div id="dropOverlay">ここに画像またはフォルダをドラッグ＆ドロップ<br>（フォルダ内サブフォルダも全自動スキャン読み込み対応）</div>
@@ -456,16 +503,17 @@
             
             <div class="pending-bar" id="pendingBarArea">
                 <div class="pending-header">
-                    <span>⏳ 未完了写真: <span id="pendingCount">0</span>件</span>
+                    <span><button id="pendingToggleBtn" title="未完了リストの表示・非表示">▾</button> ⏳ 未完了写真: <span id="pendingCount">0</span>件</span>
                     <div id="pendingBatchTools" style="display:none; gap:6px; align-items:center;">
                         <span style="color:#ff9800;">範囲選択中: <strong id="pendingSelectedCount">0</strong>件</span>
                         <button id="bulkConfirmPendingBtn" class="btn-confirm" style="font-size:10px; padding:2px 6px;">選択分を一括確定</button>
                         <button id="bulkDeletePendingBtn" class="btn-danger" style="font-size:10px; padding:2px 6px;">選択分を消去</button>
                         <button id="clearPendingSelectionBtn" class="btn-secondary" style="font-size:10px; padding:2px 6px;">解除</button>
                     </div>
-                    <span id="pendingHelpText" style="color:var(--text-sub);">※Ctrl+ドラッグ または 左長押しドラッグで一括範囲選択</span>
+                    <span id="pendingHelpText" style="color:var(--text-sub);">※写真の 🗑 で削除 ／ ✏️ で名前付け ／ Ctrl+ドラッグ で一括選択</span>
                 </div>
                 <div class="pending-list" id="pendingList"></div>
+            </div>
             </div>
 
             <div id="status">ファイルをドロップするか、左上の選択ボタンから取り込んでください</div>
@@ -615,8 +663,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.9.0-beta';
-        const APP_BUILD = '20260826-1142';
+        const APP_VERSION = '0.9.1-beta';
+        const APP_BUILD = '20260826-1450';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -713,7 +761,8 @@
             geminiApiKey: '',
             autoAiAnalyze: true,
             selectedCenter: 'GU1',
-            sidebarWidth: 360
+            sidebarWidth: 360,
+            pendingCollapsed: false
         };
 
         let selectedPendingKeys = new Set();
@@ -831,6 +880,56 @@
         });
 
         window.addEventListener('resize', () => applySidebarWidth(uiConfig.sidebarWidth));
+
+        // ============================================================
+        //  未完了バーの配置を自動で切り替える
+        //  キャンバスが正方形なので、作業スペースが横長だと高さが足りず
+        //  横が余る。その場合は未完了バーを横へ移し、空いた高さを
+        //  キャンバスに回して写真を大きく表示する。
+        // ============================================================
+        const workArea = document.getElementById('workArea');
+        const pendingBarArea = document.getElementById('pendingBarArea');
+        const pendingToggleBtn = document.getElementById('pendingToggleBtn');
+        const SIDE_STRIP_WIDTH = 130;
+
+        function updateWorkAreaLayout() {
+            if (!workArea) return;
+            const w = workArea.clientWidth;
+            const h = workArea.clientHeight;
+            if (!w || !h) return;
+
+            // 横に逃がした場合、キャンバスは「高さいっぱい」まで育つ。
+            // それでも幅が足りるなら横並びにする価値がある。
+            const heightIfSide = h;
+            const widthIfSide = w - SIDE_STRIP_WIDTH;
+            const sideCanvas = Math.min(heightIfSide, widthIfSide);
+
+            // 下に置いた場合のキャンバスの大きさ
+            const bottomCanvas = Math.min(h - 111, w);
+
+            workArea.classList.toggle('side-strip', sideCanvas > bottomCanvas + 20);
+        }
+
+        if (window.ResizeObserver) {
+            new ResizeObserver(updateWorkAreaLayout).observe(workArea);
+        } else {
+            window.addEventListener('resize', updateWorkAreaLayout);
+        }
+        updateWorkAreaLayout();
+
+        pendingToggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const collapsed = pendingBarArea.classList.toggle('collapsed');
+            pendingToggleBtn.innerText = collapsed ? '▸' : '▾';
+            uiConfig.pendingCollapsed = collapsed;
+            localStorage.setItem('photoStudioUIConfig', JSON.stringify(uiConfig));
+            status.innerText = collapsed ? "未完了リストを隠しました（写真表示が広がります）" : "未完了リストを表示しました。";
+        });
+
+        if (uiConfig.pendingCollapsed) {
+            pendingBarArea.classList.add('collapsed');
+            pendingToggleBtn.innerText = '▸';
+        }
 
         openConfigBtn.addEventListener('click', () => configModal.style.display = 'flex');
         closeConfigBtn.addEventListener('click', () => configModal.style.display = 'none');
@@ -1019,57 +1118,95 @@
                 : `写真名を自動採番「${item.customName}」に戻しました。`;
         }
 
+        // ============================================================
+        //  保存層 (v2)
+        //
+        //  v1 では「全写真を1レコードに、画像を文字列(dataURL)で」保存していた。
+        //  そのため次の問題があった:
+        //    ・写真を1枚足すたびに全件を丸ごと書き直す（枚数が増えるほど重い）
+        //    ・文字列化で容量が元画像の 2.2 倍に膨らむ
+        //    ・確定後のJPEG(editedBlob)が保存対象から漏れており、
+        //      開き直すと「完了済み」表示なのに書き出せない
+        //
+        //  v2 では画像を Blob のまま「写真1枚 = 1レコード」で持ち、
+        //  フォルダ構成などの軽い情報だけを別レコードに置く。
+        // ============================================================
+        const DB_VERSION = 2;
+        const BLOB_STORE = "photoBlobs";   // 写真1枚ぶんの画像データ
+        const META_KEY = "main_data";      // フォルダ構成・並び順・名前など
+
+        let itemIdSeq = 0;
+        function nextItemId() {
+            itemIdSeq++;
+            return `p${Date.now().toString(36)}_${itemIdSeq}`;
+        }
+
         function initDB() {
-            const req = indexedDB.open(DB_NAME, 1);
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
             req.onupgradeneeded = (e) => {
-                db = e.target.result;
-                if (!db.objectStoreNames.contains(DB_STORE)) {
-                    db.createObjectStore(DB_STORE, { keyPath: "id" });
-                }
+                const d = e.target.result;
+                if (!d.objectStoreNames.contains(DB_STORE)) d.createObjectStore(DB_STORE, { keyPath: "id" });
+                if (!d.objectStoreNames.contains(BLOB_STORE)) d.createObjectStore(BLOB_STORE, { keyPath: "id" });
             };
             req.onsuccess = (e) => {
                 db = e.target.result;
                 loadFromDB();
                 restoreDriveHandle();   // 前回選んだ保存先フォルダを復元
             };
+            req.onerror = () => {
+                console.error("IndexedDB を開けませんでした:", req.error);
+                status.innerText = "⚠ 保管庫を開けませんでした。この状態では写真が保存されません。";
+                renderUI();
+            };
         }
 
+        // --- フォルダ構成・並び順・名前など「軽い情報」だけを保存する ---
+        //     画像そのものは persistPhoto() で写真ごとに別管理。
+        //     こちらは数KB程度なので、何度呼んでも負荷にならない。
         function saveToDB() {
             if (!db) return;
             updateItemNames();
-            const tx = db.transaction(DB_STORE, "readwrite");
-            const store = tx.objectStore(DB_STORE);
-            const serializableFolders = folders.map(f => ({
-                id: f.id,
-                name: f.name,
-                isOpen: f.isOpen,
-                items: f.items.map(i => ({
-                    customName: i.customName,
-                    userName: i.userName || '',
-                    fileName: i.file ? i.file.name : i.customName,
-                    imgSrc: i.img.src,
-                    cleanCanvasData: i.cleanCanvas ? i.cleanCanvas.toDataURL() : null,
-                    vignetteShape: i.vignetteShape || null,
-                    arrows: i.arrows || [],
-                    imageAngle: i.imageAngle || 0,
-                    imageScale: i.imageScale || 1.0,
-                    offsetX: i.offsetX || 0,
-                    offsetY: i.offsetY || 0,
-                    isDone: i.isDone
-                }))
-            }));
-            const putReq = store.put({ id: "main_data", folders: serializableFolders, activeFolderId, activeItemIndex });
+
+            let tx;
+            try { tx = db.transaction(DB_STORE, "readwrite"); }
+            catch (e) { console.error("保存トランザクションを開始できません:", e); return; }
+
+            const meta = {
+                id: META_KEY,
+                folders: folders.map(f => ({
+                    id: f.id,
+                    name: f.name,
+                    isOpen: f.isOpen,
+                    items: f.items.map(i => ({
+                        id: i.id,
+                        fileName: i.fileName || (i.file && i.file.name) || '',
+                        customName: i.customName,
+                        autoName: i.autoName || '',
+                        userName: i.userName || '',
+                        hasMaskEdits: !!i.hasMaskEdits,
+                        vignetteShape: i.vignetteShape || null,
+                        arrows: i.arrows || [],
+                        imageAngle: i.imageAngle || 0,
+                        imageScale: i.imageScale || 1.0,
+                        offsetX: i.offsetX || 0,
+                        offsetY: i.offsetY || 0,
+                        isDone: !!i.isDone
+                    }))
+                })),
+                activeFolderId,
+                activeItemIndex
+            };
+
+            const putReq = tx.objectStore(DB_STORE).put(meta);
 
             // 保存失敗を握りつぶすと「次に開いたら写真が消えている」になるので必ず表に出す
             putReq.onerror = (e) => {
                 e.preventDefault();
                 const err = putReq.error;
                 console.error("saveToDB 失敗:", err);
-                if (err && err.name === 'QuotaExceededError') {
-                    status.innerText = "⚠ 保存容量オーバー: 保管庫への自動保存に失敗しました（画面上のデータは有効です）";
-                } else {
-                    status.innerText = `⚠ 保管庫への自動保存に失敗しました (${err ? err.name : '不明なエラー'})`;
-                }
+                status.innerText = (err && err.name === 'QuotaExceededError')
+                    ? "⚠ 保存容量オーバー: 保管庫への自動保存に失敗しました（画面上のデータは有効です）"
+                    : `⚠ 保管庫への自動保存に失敗しました (${err ? err.name : '不明なエラー'})`;
             };
             tx.onabort = () => {
                 console.error("saveToDB トランザクション中断:", tx.error);
@@ -1077,73 +1214,186 @@
             };
         }
 
-        function loadFromDB() {
-            if (!db) return;
-            const tx = db.transaction(DB_STORE, "readonly");
-            const store = tx.objectStore(DB_STORE);
-            const req = store.get("main_data");
-            req.onsuccess = (e) => {
-                const data = e.target.result;
-                if (data && data.folders && data.folders.length > 0) {
-                    let loadedFolders = [];
-                    let pendingCountNum = 0;
-                    data.folders.forEach(f => {
-                        let folderObj = { id: f.id, name: f.name, isOpen: f.isOpen, items: [] };
-                        f.items.forEach(i => {
-                            pendingCountNum++;
-                            const img = new Image();
-                            img.onload = () => {
-                                const cleanC = document.createElement('canvas');
-                                cleanC.width = 1200; cleanC.height = 1200;
-                                const cCtx = cleanC.getContext('2d');
-                                if (i.cleanCanvasData) {
-                                    const cleanImg = new Image();
-                                    cleanImg.onload = () => {
-                                        cCtx.drawImage(cleanImg, 0, 0);
-                                        pendingCountNum--;
-                                        if (pendingCountNum === 0) finishDBLoad(data);
-                                    };
-                                    cleanImg.src = i.cleanCanvasData;
-                                } else {
-                                    renderTransformImageToCanvas(cCtx, img, i.imageAngle || 0, i.imageScale || 1.0, i.offsetX || 0, i.offsetY || 0);
-                                    pendingCountNum--;
-                                    if (pendingCountNum === 0) finishDBLoad(data);
-                                }
-                                folderObj.items.push({
-                                    file: { name: i.fileName },
-                                    customName: i.customName,
-                                    userName: i.userName || '',
-                                    img: img,
-                                    cleanCanvas: cleanC,
-                                    vignetteShape: i.vignetteShape || null,
-                                    arrows: i.arrows || [],
-                                    imageAngle: i.imageAngle || 0,
-                                    imageScale: i.imageScale || 1.0,
-                                    offsetX: i.offsetX || 0,
-                                    offsetY: i.offsetY || 0,
-                                    processedBlob: null,
-                                    isDone: i.isDone
-                                });
-                            };
-                            img.src = i.imgSrc;
-                        });
-                        loadedFolders.push(folderObj);
-                    });
-                    folders = loadedFolders;
-                    if (pendingCountNum === 0) finishDBLoad(data);
-                } else {
-                    renderUI();
-                }
-            };
+        // --- 写真1枚ぶんの画像データを保存する ---
+        //     original : 元画像（Blob のまま。文字列化しないので容量も速度も有利）
+        //     thumb    : 一覧用の小さい画像
+        //     mask     : 文字消しをした場合のみ。していなければ元画像から作り直せるので保存しない
+        //     edited   : 確定時に生成した 200KB 以下のJPEG（v1で保存し漏れていたもの）
+        async function persistPhoto(item) {
+            if (!db || !item || !item.id) return;
+
+            let mask = null;
+            if (item.hasMaskEdits && item.cleanCanvas) {
+                mask = await new Promise(r => item.cleanCanvas.toBlob(r, 'image/jpeg', 0.92));
+            }
+
+            try {
+                const tx = db.transaction(BLOB_STORE, "readwrite");
+                const req = tx.objectStore(BLOB_STORE).put({
+                    id: item.id,
+                    original: item.file || null,
+                    thumb: item.thumbBlob || null,
+                    mask: mask,
+                    edited: item.editedBlob || null
+                });
+                req.onerror = (e) => {
+                    e.preventDefault();
+                    const err = req.error;
+                    console.error("画像データの保存に失敗:", item.customName, err);
+                    status.innerText = (err && err.name === 'QuotaExceededError')
+                        ? "⚠ 保存容量オーバー: これ以上写真を保存できません（不要なフォルダを削除してください）"
+                        : `⚠ 画像データの保存に失敗しました (${err ? err.name : '不明'})`;
+                };
+            } catch (e) {
+                console.error("画像データの保存でエラー:", e);
+            }
         }
 
-        function finishDBLoad(data) {
-            activeFolderId = data.activeFolderId || folders[0].id;
-            activeItemIndex = data.activeItemIndex !== undefined ? data.activeItemIndex : -1;
+        function readBlobRecord(id) {
+            return new Promise(resolve => {
+                try {
+                    const r = db.transaction(BLOB_STORE, "readonly").objectStore(BLOB_STORE).get(id);
+                    r.onsuccess = () => resolve(r.result || null);
+                    r.onerror = () => resolve(null);
+                } catch (e) { resolve(null); }
+            });
+        }
+
+        // Blob から <img> を作る。dataURL と違い巨大な文字列を経由しないので速い。
+        function blobToImage(blob) {
+            return new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(blob);
+                const im = new Image();
+                im.onload = () => resolve({ img: im, url });
+                im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('画像をデコードできません')); };
+                im.src = url;
+            });
+        }
+
+        async function restoreItem(meta) {
+            const rec = await readBlobRecord(meta.id);
+            if (!rec || !rec.original) return null;
+
+            let loaded;
+            try { loaded = await blobToImage(rec.original); }
+            catch (e) { console.warn("復元に失敗:", meta.customName, e); return null; }
+
+            const item = {
+                id: meta.id,
+                file: rec.original,
+                fileName: meta.fileName || '',
+                customName: meta.customName || '',
+                autoName: meta.autoName || '',
+                userName: meta.userName || '',
+                img: loaded.img,
+                _objUrl: loaded.url,
+                thumbBlob: rec.thumb || null,
+                thumbUrl: rec.thumb ? URL.createObjectURL(rec.thumb) : loaded.url,
+                cleanCanvas: null,
+                hasMaskEdits: !!meta.hasMaskEdits,
+                vignetteShape: meta.vignetteShape || null,
+                arrows: meta.arrows || [],
+                imageAngle: meta.imageAngle || 0,
+                imageScale: meta.imageScale || 1.0,
+                offsetX: meta.offsetX || 0,
+                offsetY: meta.offsetY || 0,
+                editedBlob: rec.edited || null,
+                isDone: !!meta.isDone
+            };
+
+            const c = document.createElement('canvas');
+            c.width = 1200; c.height = 1200;
+            const cc = c.getContext('2d');
+
+            if (item.hasMaskEdits && rec.mask) {
+                try {
+                    const m = await blobToImage(rec.mask);
+                    cc.drawImage(m.img, 0, 0, 1200, 1200);
+                    URL.revokeObjectURL(m.url);
+                } catch (e) {
+                    renderTransformImageToCanvas(cc, item.img, item.imageAngle, item.imageScale, item.offsetX, item.offsetY);
+                }
+            } else {
+                // 文字消しをしていない写真は元画像から作り直せる。保存しないぶん容量も画質も有利。
+                renderTransformImageToCanvas(cc, item.img, item.imageAngle, item.imageScale, item.offsetX, item.offsetY);
+            }
+            item.cleanCanvas = c;
+            return item;
+        }
+
+        async function loadFromDB() {
+            if (!db) return;
+
+            const data = await new Promise(resolve => {
+                try {
+                    const r = db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get(META_KEY);
+                    r.onsuccess = () => resolve(r.result || null);
+                    r.onerror = () => resolve(null);
+                } catch (e) { resolve(null); }
+            });
+
+            if (!data || !data.folders || data.folders.length === 0) { renderUI(); return; }
+
+            const total = data.folders.reduce((n, f) => n + (f.items ? f.items.length : 0), 0);
+            if (total > 0) status.innerText = `保管庫を読み込んでいます... (0/${total})`;
+
+            const loadedFolders = [];
+            const liveIds = new Set();
+            let done = 0, failed = 0;
+
+            for (const f of data.folders) {
+                const folderObj = { id: f.id, name: f.name, isOpen: f.isOpen, items: [] };
+                for (const m of (f.items || [])) {
+                    const item = await restoreItem(m);
+                    // push で順番どおりに積む。v1 は img.onload の中で push していたため
+                    // 読み込み順によって並びが入れ替わることがあった。
+                    if (item) { folderObj.items.push(item); liveIds.add(item.id); }
+                    else failed++;
+                    done++;
+                    if (total > 20 && done % 10 === 0) status.innerText = `保管庫を読み込んでいます... (${done}/${total})`;
+                }
+                loadedFolders.push(folderObj);
+            }
+
+            folders = loadedFolders;
+            finishDBLoad(data, failed);
+            purgeOrphanBlobs(liveIds);
+        }
+
+        function finishDBLoad(data, failed) {
+            if (!folders.length) folders = [{ id: 'folder_1', name: '📁 分類グループ1', isOpen: true, items: [] }];
+            activeFolderId = folders.some(f => f.id === data.activeFolderId) ? data.activeFolderId : folders[0].id;
+
+            const af = folders.find(f => f.id === activeFolderId);
+            const wanted = (data.activeItemIndex !== undefined) ? data.activeItemIndex : -1;
+            activeItemIndex = (af && wanted >= 0 && wanted < af.items.length) ? wanted : -1;
+
             updateItemNames();
             renderUI();
             if (activeItemIndex !== -1) loadQueueItem(activeFolderId, activeItemIndex);
-            status.innerText = "写真保管庫からデータを読み込みました。";
+
+            const n = folders.reduce((a, f) => a + f.items.length, 0);
+            status.innerText = failed
+                ? `保管庫から ${n} 件を読み込みました（${failed} 件は復元できませんでした）`
+                : `保管庫から ${n} 件を読み込みました。`;
+        }
+
+        // メタ情報から参照されなくなった画像データを掃除する（削除した写真の残骸）
+        function purgeOrphanBlobs(liveIds) {
+            if (!db) return;
+            try {
+                const req = db.transaction(BLOB_STORE, "readwrite").objectStore(BLOB_STORE).openCursor();
+                let removed = 0;
+                req.onsuccess = (e) => {
+                    const cur = e.target.result;
+                    if (!cur) {
+                        if (removed) console.log(`未参照の画像データ ${removed} 件を削除しました`);
+                        return;
+                    }
+                    if (!liveIds.has(cur.key)) { cur.delete(); removed++; }
+                    cur.continue();
+                };
+            } catch (e) { console.warn("画像データの掃除に失敗:", e); }
         }
 
         initDB();
@@ -1168,6 +1418,30 @@
             const h = img.height * baseScale;
             targetCtx.drawImage(img, -w / 2, -h / 2, w, h);
             targetCtx.restore();
+        }
+
+        // --- 一覧用の小さい画像を作る ---
+        // 未完了バーは 68x68、完了リストは 36x36 でしか表示しないのに、
+        // v1 は 4000x3000 の元画像をそのまま <img> に渡していた。
+        // 写真30枚なら 4000x3000 を30枚ぶんデコードすることになり、これが重さの主因だった。
+        const THUMB_SIZE = 192;
+        function makeThumbnail(img) {
+            return new Promise(resolve => {
+                try {
+                    const w = img.naturalWidth || img.width;
+                    const h = img.naturalHeight || img.height;
+                    if (!w || !h) { resolve(null); return; }
+
+                    const scale = Math.min(THUMB_SIZE / w, THUMB_SIZE / h, 1);
+                    const c = document.createElement('canvas');
+                    c.width = Math.max(1, Math.round(w * scale));
+                    c.height = Math.max(1, Math.round(h * scale));
+                    const cx = c.getContext('2d');
+                    cx.imageSmoothingQuality = 'high';
+                    cx.drawImage(img, 0, 0, c.width, c.height);
+                    c.toBlob(b => resolve(b), 'image/jpeg', 0.8);
+                } catch (e) { resolve(null); }
+            });
         }
 
         function createCleanCanvas(img, angle = 0, zoom = 1.0, offX = 0, offY = 0) {
@@ -1530,38 +1804,44 @@
             for (let fileIdx = 0; fileIdx < validFiles.length; fileIdx++) {
                 const file = validFiles[fileIdx];
                 try {
-                    const dataUrl = await new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = (e) => resolve(e.target.result);
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    });
+                    // v1 は FileReader で dataURL 化していたが、4000x3000 の写真だと
+                    // 1MB超の文字列を作って再デコードするため非常に遅かった。
+                    // Blob URL なら変換が要らず、そのまま画像として読める。
+                    const loaded = await blobToImage(file);
+                    const thumbBlob = await makeThumbnail(loaded.img);
+                    const cleanC = createCleanCanvas(loaded.img, 0, 1.0, 0, 0);
 
-                    const img = await new Promise((resolve, reject) => {
-                        const image = new Image();
-                        image.onload = () => resolve(image);
-                        image.onerror = reject;
-                        image.src = dataUrl;
-                    });
-
-                    const cleanC = createCleanCanvas(img, 0, 1.0, 0, 0);
-                    folder.items.push({ 
-                        file: file, 
-                        customName: '', 
-                        img: img, 
+                    const item = {
+                        id: nextItemId(),
+                        file: file,
+                        fileName: file.name,
+                        customName: '',
+                        autoName: '',
+                        userName: '',
+                        img: loaded.img,
+                        _objUrl: loaded.url,
+                        thumbBlob: thumbBlob,
+                        thumbUrl: thumbBlob ? URL.createObjectURL(thumbBlob) : loaded.url,
                         cleanCanvas: cleanC,
+                        hasMaskEdits: false,
                         vignetteShape: null,
                         arrows: [],
                         imageAngle: 0,
                         imageScale: 1.0,
                         offsetX: 0,
                         offsetY: 0,
-                        processedBlob: null, 
+                        editedBlob: null,
                         isDone: false
-                    });
+                    };
+                    folder.items.push(item);
+                    persistPhoto(item);
 
-                    if (!firstLoadedImg) firstLoadedImg = img;
+                    if (!firstLoadedImg) firstLoadedImg = loaded.img;
                     loadedCount++;
+
+                    if (validFiles.length > 5 && loadedCount % 5 === 0) {
+                        status.innerText = `画像を読み込み中... (${loadedCount}/${validFiles.length})`;
+                    }
                 } catch (err) {
                     console.warn("画像読み込み失敗スキップ:", file.name, err);
                     failedFiles.push(file.name);
@@ -1643,13 +1923,20 @@
                         };
 
                         el.innerHTML = `
-                            <img src="${item.img.src}">
-                            <button class="pending-rename" title="この写真に名前を付ける">✏️</button>
+                            <img src="${item.thumbUrl || item.img.src}" loading="lazy">
+                            <button class="pending-btn pending-delete" title="この写真を削除する（Ctrl+Zで元に戻せます）">🗑</button>
+                            <button class="pending-btn pending-rename" title="この写真に名前を付ける">✏️</button>
                             <div class="title">${item.customName}</div>
                         `;
                         el.querySelector('.pending-rename').onclick = (ev) => {
                             ev.stopPropagation();
                             renamePhoto(folder.id, index);
+                        };
+                        el.querySelector('.pending-delete').onclick = (ev) => {
+                            ev.stopPropagation();
+                            if (confirm(`「${item.customName}」を削除しますか？\n\n※ Ctrl+Z または「戻す」ボタンで元に戻せます。`)) {
+                                removeItem(folder.id, index);
+                            }
                         };
                         el.onclick = () => {
                             if (selectedPendingKeys.size > 0) {
@@ -1791,6 +2078,9 @@
             if (selectedPendingKeys.size === 0) return;
             status.innerText = `${selectedPendingKeys.size} 件の写真を一括確定処理中 (200KB以下最適化)...`;
 
+            let n = 0, total = 0;
+            const totalCount = selectedPendingKeys.size;
+
             for (const key of selectedPendingKeys) {
                 const [folderId, idxStr] = key.split('_');
                 const folder = folders.find(f => f.id === folderId);
@@ -1798,8 +2088,12 @@
                 if (folder && folder.items[idx]) {
                     const item = folder.items[idx];
                     const blob = await processSingleItemBlob(item);
-                    item.processedBlob = blob;
+                    item.editedBlob = blob;
                     item.isDone = true;
+                    await persistPhoto(item);      // 確定画像をDBへ保存
+                    n++;
+                    total += blob ? blob.size : 0;
+                    status.innerText = `一括確定中... (${n}/${totalCount})`;
                 }
             }
 
@@ -1807,7 +2101,9 @@
             updatePendingSelectionUI();
             renderUI();
             saveToDB();
-            status.innerText = "選択された写真を一括確定し完了パネルへ移動しました！";
+            status.innerText = n
+                ? `${n} 件を確定しました（合計 ${formatSize(total)} / 平均 ${formatSize(Math.round(total / n))}・すべて200KB以下）`
+                : "確定できる写真がありませんでした。";
         });
 
         function renderCompletedTree() {
@@ -1876,6 +2172,13 @@
                     folderActions.appendChild(dlBtn);
                 }
 
+                const delFolderBtn = document.createElement('button');
+                delFolderBtn.className = 'icon-btn del-btn';
+                delFolderBtn.innerHTML = '🗑';
+                delFolderBtn.title = 'このフォルダを写真ごと削除する';
+                delFolderBtn.onclick = (e) => { e.stopPropagation(); deleteFolder(folder.id); };
+                folderActions.appendChild(delFolderBtn);
+
                 header.appendChild(folderActions);
                 folderNode.appendChild(header);
 
@@ -1930,7 +2233,7 @@
                     };
 
                     itemEl.innerHTML = `
-                        <img src="${item.img.src}">
+                        <img src="${item.thumbUrl || item.img.src}" loading="lazy">
                         <div class="info"><div class="filename">${item.customName}</div></div>
                     `;
 
@@ -2046,6 +2349,42 @@
                 status.innerText = `フォルダ「${name.trim()}」を作成しました。`;
             }
         });
+
+        // --- フォルダごと削除する（Ctrl+Z で復元できる）---
+        function deleteFolder(folderId) {
+            const idx = folders.findIndex(f => f.id === folderId);
+            if (idx === -1) return;
+            const folder = folders[idx];
+
+            const n = folder.items.length;
+            const msg = n > 0
+                ? `フォルダ「${folder.name}」を、中の写真 ${n} 件ごと削除しますか？\n\n※ Ctrl+Z または「戻す」ボタンで元に戻せます。`
+                : `空のフォルダ「${folder.name}」を削除しますか？`;
+            if (!confirm(msg)) return;
+
+            folders.splice(idx, 1);
+            deletedHistory.push({ type: 'folder', index: idx, folder: folder });
+            undoBtn.disabled = false;
+
+            if (folders.length === 0) {
+                folders.push({ id: `folder_${Date.now()}`, name: '📁 分類グループ1', isOpen: true, items: [] });
+            }
+            if (activeFolderId === folderId) {
+                activeFolderId = folders[0].id;
+                activeItemIndex = -1;
+                ctx.clearRect(0, 0, 1200, 1200);
+                confirmBtn.disabled = true;
+                downloadSingleBtn.disabled = true;
+                compareBtn.disabled = true;
+            }
+
+            selectedPendingKeys.clear();
+            selectedItemKeys.clear();
+            updateItemNames();
+            renderUI();
+            saveToDB();
+            status.innerText = `フォルダ「${folder.name}」を削除しました。(Ctrl+Zで復元可能)`;
+        }
 
         function removeItem(folderId, index) {
             const folder = folders.find(f => f.id === folderId);
@@ -2282,7 +2621,11 @@
                 const cCtx = item.cleanCanvas.getContext('2d');
                 cCtx.clearRect(0, 0, 1200, 1200);
                 cCtx.drawImage(baseCanvas, 0, 0);
-                if (persist) saveToDB();
+                if (persist) {
+                    saveToDB();
+                    // 文字消しをした写真だけ、加工後の画像も保存する
+                    if (item.hasMaskEdits) persistPhoto(item);
+                }
             }
         }
 
@@ -2312,7 +2655,7 @@
 
                     tr.innerHTML = `
                         <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleItemSelection('${itemKey}'); renderVaultTable();"></td>
-                        <td><img src="${item.img.src}"></td>
+                        <td><img src="${item.thumbUrl || item.img.src}" loading="lazy"></td>
                         <td><strong>${folder.name}</strong></td>
                         <td>
                             <strong>${item.customName}</strong>
@@ -2354,12 +2697,12 @@
 
             for (const folder of folders) {
                 for (const item of folder.items) {
-                    if (item.processedBlob) {
+                    if (item.editedBlob) {
                         try {
                             const metadata = { name: `${item.customName}.jpg`, mimeType: 'image/jpeg' };
                             const formData = new FormData();
                             formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-                            formData.append('file', item.processedBlob);
+                            formData.append('file', item.editedBlob);
 
                             await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                                 method: 'POST',
@@ -2427,16 +2770,29 @@
             } 
             else if (deletedHistory.length > 0) {
                 const restored = deletedHistory.pop();
-                let folder = folders.find(f => f.id === restored.folderId);
-                if (!folder) folder = folders[0];
 
-                const insertIdx = Math.min(restored.index, folder.items.length);
-                folder.items.splice(insertIdx, 0, restored.item);
-                updateItemNames();
-                renderUI();
-                saveToDB();
-                loadQueueItem(folder.id, insertIdx);
-                status.innerText = "削除した写真を復元しました。";
+                if (restored.type === 'folder') {
+                    const at = Math.min(restored.index, folders.length);
+                    folders.splice(at, 0, restored.folder);
+                    activeFolderId = restored.folder.id;
+                    activeItemIndex = -1;
+                    updateItemNames();
+                    renderUI();
+                    saveToDB();
+                    if (restored.folder.items.length > 0) loadQueueItem(restored.folder.id, 0);
+                    status.innerText = `フォルダ「${restored.folder.name}」を復元しました。`;
+                } else {
+                    let folder = folders.find(f => f.id === restored.folderId);
+                    if (!folder) folder = folders[0];
+
+                    const insertIdx = Math.min(restored.index, folder.items.length);
+                    folder.items.splice(insertIdx, 0, restored.item);
+                    updateItemNames();
+                    renderUI();
+                    saveToDB();
+                    loadQueueItem(folder.id, insertIdx);
+                    status.innerText = "削除した写真を復元しました。";
+                }
                 if (deletedHistory.length === 0) undoBtn.disabled = true;
             }
         }
@@ -3228,6 +3584,11 @@
         });
 
         function drawBrushStroke(start, end) {
+            // 文字消しをした写真は元画像から作り直せないので、
+            // 加工後のキャンバスを保存対象にする目印を立てる
+            const item = getActiveItem();
+            if (item) item.hasMaskEdits = true;
+
             [baseCtx, ctx].forEach(c => {
                 c.lineWidth = brushSize; c.lineCap = "round"; c.lineJoin = "round";
                 c.strokeStyle = currentColor; c.beginPath();
@@ -3290,23 +3651,59 @@
                 itemObj.arrows.forEach(arr => drawSingleArrowObject(oCtx, arr, false));
             }
 
-            let low = 0.1, high = 0.95, bestBlob = null;
-            const MAX_SIZE = 200 * 1024; // 200KB上限
+            const MAX_SIZE = 200 * 1024;   // 200KB上限
 
-            for (let i = 0; i < 7; i++) {
+            const encode = (q) => new Promise(resolve => outCanvas.toBlob(resolve, 'image/jpeg', q));
+
+            // まず高品質で1回だけ試す。通常の検品写真はこの時点で 30〜40KB 程度に収まるため、
+            // 大半のケースは 1回のエンコードで終わる（v1 は常に7回まわしていた）。
+            let best = await encode(0.95);
+            if (best && best.size <= MAX_SIZE) return best;
+
+            // 収まらない場合だけ品質を二分探索する
+            let low = 0.1, high = 0.95;
+            best = null;
+            for (let i = 0; i < 6; i++) {
                 const mid = (low + high) / 2;
-                const blob = await new Promise(resolve => outCanvas.toBlob(resolve, 'image/jpeg', mid));
-                if (blob.size <= MAX_SIZE) {
-                    bestBlob = blob;
-                    low = mid;
-                } else {
-                    high = mid;
+                const blob = await encode(mid);
+                if (!blob) break;
+                if (blob.size <= MAX_SIZE) { best = blob; low = mid; }
+                else { high = mid; }
+            }
+            if (best) return best;
+
+            // ここまでで収まらなかった場合の最終手段。
+            // v1 は品質0.1の結果をサイズ未確認のまま返しており、200KB超を返す可能性があった。
+            // 品質を下げ切り、それでも駄目なら縮小して必ず 200KB 以下にする。
+            for (const q of [0.1, 0.05, 0.02]) {
+                const blob = await encode(q);
+                if (blob && blob.size <= MAX_SIZE) return blob;
+            }
+
+            let scale = 0.8;
+            for (let i = 0; i < 4; i++) {
+                const small = document.createElement('canvas');
+                small.width = Math.round(1200 * scale);
+                small.height = Math.round(1200 * scale);
+                small.getContext('2d').drawImage(outCanvas, 0, 0, small.width, small.height);
+                const blob = await new Promise(r => small.toBlob(r, 'image/jpeg', 0.6));
+                if (blob && blob.size <= MAX_SIZE) {
+                    console.warn(`200KBに収めるため ${small.width}px へ縮小しました`);
+                    return blob;
                 }
+                scale *= 0.75;
             }
-            if (!bestBlob) {
-                bestBlob = await new Promise(resolve => outCanvas.toBlob(resolve, 'image/jpeg', 0.1));
-            }
-            return bestBlob;
+
+            console.error("200KB以下に圧縮できませんでした");
+            return await encode(0.02);
+        }
+
+        // 人が読めるサイズ表記
+        function formatSize(bytes) {
+            if (!bytes && bytes !== 0) return '不明';
+            return bytes >= 1024 * 1024
+                ? (bytes / 1024 / 1024).toFixed(1) + ' MB'
+                : Math.round(bytes / 1024) + ' KB';
         }
 
         async function processCurrentBlob() {
@@ -3340,10 +3737,10 @@
 
         function downloadFolderItems(folder) {
             folder.items.forEach((item, i) => {
-                if (item.processedBlob) {
+                if (item.editedBlob) {
                     setTimeout(() => {
                         const link = document.createElement('a');
-                        link.href = URL.createObjectURL(item.processedBlob);
+                        link.href = URL.createObjectURL(item.editedBlob);
                         link.download = `${item.customName}.jpg`;
                         link.click();
                     }, i * 250);
@@ -3366,8 +3763,8 @@
                 
                 let zipFolder = zip.folder(folderCleanName);
                 folder.items.forEach(item => {
-                    if (item.isDone && item.processedBlob) {
-                        zipFolder.file(`${item.customName}.jpg`, item.processedBlob);
+                    if (item.isDone && item.editedBlob) {
+                        zipFolder.file(`${item.customName}.jpg`, item.editedBlob);
                         count++;
                     }
                 });
@@ -3564,7 +3961,7 @@
             const targets = [];
             folders.forEach(folder => {
                 folder.items.forEach(item => {
-                    if (item.isDone && item.processedBlob) targets.push({ folder, item });
+                    if (item.isDone && item.editedBlob) targets.push({ folder, item });
                 });
             });
 
@@ -3582,7 +3979,7 @@
                     const sub = await driveHandle.getDirectoryHandle(sanitizeName(folder.name), { create: true });
                     const fh = await sub.getFileHandle(`${sanitizeName(item.customName)}.jpg`, { create: true });
                     const writable = await fh.createWritable();
-                    await writable.write(item.processedBlob);
+                    await writable.write(item.editedBlob);
                     await writable.close();
                     done++;
                 } catch (e) {
@@ -3653,24 +4050,35 @@
                 isEditing = false;
             }
 
+            status.innerText = "200KB以下に圧縮しています...";
+            const confirmedItem = folder.items[activeItemIndex];
             const bestBlob = await processCurrentBlob();
 
-            folder.items[activeItemIndex].processedBlob = bestBlob;
-            folder.items[activeItemIndex].isDone = true;
+            confirmedItem.editedBlob = bestBlob;
+            confirmedItem.isDone = true;
 
+            // 確定した画像を必ずDBへ保存する。
+            // v1 はここで保存しておらず、開き直すと「完了済み」表示なのに
+            // ZIP も フォルダ書き出しも 0 件になっていた。
+            await persistPhoto(confirmedItem);
             saveToDB();
+
+            const sizeText = `${confirmedItem.customName}: ${formatSize(bestBlob ? bestBlob.size : 0)}`
+                + (bestBlob && bestBlob.size <= 200 * 1024 ? '（200KB以下 ✓）' : '（⚠ 200KB超）');
 
             triggerSlideToRightAnimation(() => {
                 const nextIndex = folder.items.findIndex((item, idx) => idx > activeItemIndex && !item.isDone);
                 if (nextIndex !== -1) {
                     loadQueueItem(folder.id, nextIndex);
+                    status.innerText = `確定 ${sizeText} ／ 次の写真へ`;
                 } else {
                     const firstPendingIndex = folder.items.findIndex(item => !item.isDone);
                     if (firstPendingIndex !== -1) {
                         loadQueueItem(folder.id, firstPendingIndex);
+                        status.innerText = `確定 ${sizeText} ／ 次の写真へ`;
                     } else {
                         renderUI();
-                        status.innerText = `「${folder.name}」の全画像処理が完了しました！「📦 ZIP一括DL」ボタンからダウンロード可能です。`;
+                        status.innerText = `確定 ${sizeText} ／「${folder.name}」の全画像が完了しました。「📦 ZIP一括DL」から書き出せます。`;
                     }
                 }
             });
