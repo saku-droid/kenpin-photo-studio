@@ -452,17 +452,17 @@
 
         /* 表示モードのプリセット */
         .mode-preset-row { display: flex; gap: 8px; }
-        .mode-preset {
+        .mode-preset, .pending-pos {
             flex: 1; display: flex; flex-direction: column; gap: 3px;
             background: var(--bg-panel); color: var(--text-main);
             border: 1px solid var(--border-color); border-radius: 8px;
             padding: 10px 12px; text-align: left; cursor: pointer;
             transition: border-color 0.15s, background 0.15s;
         }
-        .mode-preset:hover { border-color: var(--text-sub); }
-        .mode-preset.active { border-color: #007bff; background: rgba(0,123,255,0.10); }
-        .mode-preset strong { font-size: 12px; }
-        .mode-preset span { font-size: 10px; color: var(--text-sub); line-height: 1.4; }
+        .mode-preset:hover, .pending-pos:hover { border-color: var(--text-sub); }
+        .mode-preset.active, .pending-pos.active { border-color: #007bff; background: rgba(0,123,255,0.10); }
+        .mode-preset strong, .pending-pos strong { font-size: 12px; }
+        .mode-preset span, .pending-pos span { font-size: 10px; color: var(--text-sub); line-height: 1.4; }
 
         /* キーボード割り当て */
         .keymap-list { display: flex; flex-direction: column; gap: 4px; }
@@ -766,6 +766,27 @@
                             <span>ボタンを最小限に。キーボード中心</span>
                         </button>
                     </div>
+                    <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border-sub);">
+                        <div style="font-size:12px; font-weight:bold; margin-bottom:6px;">未完了写真の置き場所</div>
+                        <p style="font-size:11px; margin:0 0 8px 0; color:var(--text-sub);">
+                            右側は完了パネルがあるため、未完了は左か下に置きます。
+                        </p>
+                        <div class="mode-preset-row">
+                            <button class="pending-pos" data-pos="auto">
+                                <strong>自動</strong>
+                                <span>横幅に余裕があれば左、狭ければ下</span>
+                            </button>
+                            <button class="pending-pos" data-pos="left">
+                                <strong>左に固定</strong>
+                                <span>写真が縦に並ぶ。作業画面が広い</span>
+                            </button>
+                            <button class="pending-pos" data-pos="bottom">
+                                <strong>下に固定</strong>
+                                <span>写真が横に並ぶ。従来の配置</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="config-group" style="margin-top:12px;">
                         <label class="config-item">
                             <input type="checkbox" id="cfgShowModeButtons" checked>
@@ -825,8 +846,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.9.3-beta';
-        const APP_BUILD = '20260826-1715';
+        const APP_VERSION = '0.9.4-beta';
+        const APP_BUILD = '20260826-1800';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -931,6 +952,7 @@
             showPhotoNav: true,
             showPendingTools: true,
             displayPreset: 'beginner',
+            pendingPosition: 'auto',
             keymap: {}
         };
 
@@ -1014,6 +1036,7 @@
             });
 
             applySidebarWidth(uiConfig.sidebarWidth);
+            applyPendingPosition(uiConfig.pendingPosition || 'auto');
         }
 
         // ============================================================
@@ -1087,21 +1110,43 @@
 
         function updateWorkAreaLayout() {
             if (!workArea) return;
+
+            const pos = uiConfig.pendingPosition || 'auto';
+            if (pos === 'left')   { workArea.classList.add('side-strip'); return; }
+            if (pos === 'bottom') { workArea.classList.remove('side-strip'); return; }
+
             const w = workArea.clientWidth;
             const h = workArea.clientHeight;
             if (!w || !h) return;
 
-            // 横に逃がした場合、キャンバスは「高さいっぱい」まで育つ。
-            // それでも幅が足りるなら横並びにする価値がある。
-            const heightIfSide = h;
-            const widthIfSide = w - SIDE_STRIP_WIDTH;
-            const sideCanvas = Math.min(heightIfSide, widthIfSide);
+            // 左に逃がした場合、キャンバスは「高さいっぱい」まで育つ。
+            // それでも幅が足りるなら左に置いた方が写真を大きく見せられる。
+            const stripWidth = (parseInt(uiConfig.thumbSize, 10) || 100) + 30;
+            const sideCanvas = Math.min(h, w - stripWidth);
 
             // 下に置いた場合のキャンバスの大きさ
-            const bottomCanvas = Math.min(h - 111, w);
+            const barHeight = (parseInt(uiConfig.thumbSize, 10) || 100) + 48;
+            const bottomCanvas = Math.min(h - barHeight, w);
 
             workArea.classList.toggle('side-strip', sideCanvas > bottomCanvas + 20);
         }
+
+        function applyPendingPosition(pos) {
+            uiConfig.pendingPosition = pos;
+            document.querySelectorAll('.pending-pos').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-pos') === pos);
+            });
+            updateWorkAreaLayout();
+        }
+
+        document.querySelectorAll('.pending-pos').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const pos = btn.getAttribute('data-pos');
+                applyPendingPosition(pos);
+                localStorage.setItem('photoStudioUIConfig', JSON.stringify(uiConfig));
+                status.innerText = `未完了写真の置き場所を「${btn.querySelector('strong').innerText}」にしました。`;
+            });
+        });
 
         if (window.ResizeObserver) {
             new ResizeObserver(updateWorkAreaLayout).observe(workArea);
@@ -1496,31 +1541,78 @@
             return `p${Date.now().toString(36)}_${itemIdSeq}`;
         }
 
+        let dbOpenSettled = false;
+
+        // DBが使えない状態でも、取り込み・加工は続けられるようにする。
+        // ただし保存されないことは必ず画面に出す。
+        function startWithoutDB(reason) {
+            if (dbOpenSettled) return;
+            dbOpenSettled = true;
+            db = null;
+            console.error("保管庫を開けません:", reason);
+            renderUI();
+            status.innerText = `⚠ 保管庫を開けません（${reason}）。写真の加工・書き出しはできますが、閉じると消えます。`;
+        }
+
         function initDB() {
-            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            let req;
+            try { req = indexedDB.open(DB_NAME, DB_VERSION); }
+            catch (e) { startWithoutDB(e.message || 'IndexedDBが使えません'); return; }
+
             req.onupgradeneeded = (e) => {
                 const d = e.target.result;
                 if (!d.objectStoreNames.contains(DB_STORE)) d.createObjectStore(DB_STORE, { keyPath: "id" });
                 if (!d.objectStoreNames.contains(BLOB_STORE)) d.createObjectStore(BLOB_STORE, { keyPath: "id" });
             };
+
+            // 別のタブが古いバージョンで開いたままだと、ここで止まる。
+            // 以前は何も出ずに固まり、写真が保存されない状態に気付けなかった。
+            req.onblocked = () => {
+                status.innerText = "⚠ 別のタブでこのアプリが開いています。他のタブを閉じてから再読み込みしてください。";
+                alert("このアプリを開いている他のタブ／ウィンドウがあるため、保管庫を更新できません。\n\n"
+                    + "他のタブをすべて閉じてから、このページを再読み込み（Ctrl+Shift+R）してください。");
+            };
+
             req.onsuccess = (e) => {
+                dbOpenSettled = true;
                 db = e.target.result;
+
+                // 他のタブが新しいバージョンへ上げようとしたら、こちらの接続を明け渡す。
+                // これが無いと、古いタブが居座って新しいタブが永久にブロックされる。
+                db.onversionchange = () => {
+                    db.close();
+                    db = null;
+                    status.innerText = "⚠ 別のタブで保管庫が更新されました。このタブを再読み込みしてください。";
+                };
+                db.onclose = () => { db = null; status.innerText = "⚠ 保管庫との接続が切れました。再読み込みしてください。"; };
+
                 loadFromDB();
                 restoreDriveHandle();   // 前回選んだ保存先フォルダを復元
             };
-            req.onerror = () => {
-                console.error("IndexedDB を開けませんでした:", req.error);
-                status.innerText = "⚠ 保管庫を開けませんでした。この状態では写真が保存されません。";
-                renderUI();
-            };
+
+            req.onerror = () => startWithoutDB((req.error && req.error.name) || '不明なエラー');
+
+            // 何も起きないまま固まるのを防ぐ保険
+            setTimeout(() => {
+                if (!dbOpenSettled) startWithoutDB('応答がありません／他のタブが開いている可能性');
+            }, 8000);
         }
 
         // --- フォルダ構成・並び順・名前など「軽い情報」だけを保存する ---
         //     画像そのものは persistPhoto() で写真ごとに別管理。
         //     こちらは数KB程度なので、何度呼んでも負荷にならない。
+        // 保存できない状態を1度だけ知らせる（毎回出すとうるさいため）
+        let noDbWarned = false;
+        function warnNoDbOnce() {
+            if (noDbWarned) return;
+            noDbWarned = true;
+            console.warn("保管庫が使えないため保存をスキップしています");
+            status.innerText = "⚠ 保管庫に保存できていません。他のタブを閉じて再読み込みしてください（加工と書き出しは可能です）";
+        }
+
         function saveToDB() {
-            if (!db) return;
             updateItemNames();
+            if (!db) { warnNoDbOnce(); return; }
 
             let tx;
             try { tx = db.transaction(DB_STORE, "readwrite"); }
@@ -1575,7 +1667,8 @@
         //     mask     : 文字消しをした場合のみ。していなければ元画像から作り直せるので保存しない
         //     edited   : 確定時に生成した 200KB 以下のJPEG（v1で保存し漏れていたもの）
         async function persistPhoto(item) {
-            if (!db || !item || !item.id) return;
+            if (!item || !item.id) return;
+            if (!db) { warnNoDbOnce(); return; }
 
             let mask = null;
             if (item.hasMaskEdits && item.cleanCanvas) {
