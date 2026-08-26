@@ -67,6 +67,40 @@
             flex-shrink: 0;
         }
 
+        .header-left-tools { display: flex; align-items: center; gap: 10px; }
+
+        /* 写真を1枚ずつ行き来する（ブラウザの戻る／進む相当） */
+        .photo-nav {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            background: #222222;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 3px 4px;
+        }
+        .photo-nav button {
+            background: transparent;
+            color: #cccccc;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 9px;
+            font-size: 13px;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .photo-nav button:hover:not(:disabled) { background: #007bff; color: #fff; }
+        .photo-nav button:disabled { color: #555555; cursor: default; }
+        #photoNavLabel {
+            font-size: 11px;
+            font-family: monospace;
+            color: #888888;
+            min-width: 46px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
         /* 画面一番左の大きめセンター対応タブ */
         .large-center-tabs {
             display: flex;
@@ -287,10 +321,10 @@
         /* 横並びモード */
         .work-area.side-strip { flex-direction: row; }
         .work-area.side-strip > .pending-bar {
-            width: 124px;
+            width: calc(var(--thumb-size, 100px) + 24px);
             height: auto;
             margin-top: 0;
-            flex: 0 0 124px;
+            flex: 0 0 calc(var(--thumb-size, 100px) + 24px);
         }
         .work-area.side-strip .pending-header { flex-direction: column; align-items: flex-start; gap: 3px; }
         .work-area.side-strip .pending-list { flex-direction: column; overflow-x: hidden; overflow-y: auto; align-items: flex-start; }
@@ -308,9 +342,10 @@
         }
         #pendingToggleBtn:hover { background: #007bff; color: #fff; }
 
+        /* サムネイルの大きさに合わせてバーの高さも変える（ヘッダー+余白ぶんを加算） */
         .pending-bar {
             width: 100%;
-            height: 105px;
+            height: calc(var(--thumb-size, 100px) + 42px);
             background: var(--bg-subpanel); 
             border-radius: 6px; 
             margin-top: 6px; 
@@ -323,7 +358,9 @@
         }
         .pending-header { font-size: 11px; font-weight: bold; color: #ff9800; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
         .pending-list { flex: 1; display: flex; gap: 6px; overflow-x: auto; align-items: center; padding-bottom: 4px; position: relative; touch-action: none; }
-        .pending-item { width: 68px; height: 68px; flex-shrink: 0; background: var(--bg-control); border-radius: 4px; border: 2px solid transparent; cursor: grab; position: relative; overflow: hidden; transition: border-color 0.2s, box-shadow 0.2s; }
+        .pending-item { width: var(--thumb-size, 100px); height: var(--thumb-size, 100px); flex-shrink: 0; background: var(--bg-control); border-radius: 4px; border: 2px solid transparent; cursor: grab; position: relative; overflow: hidden; transition: border-color 0.2s, box-shadow 0.2s; }
+        .pending-list.selecting .pending-item { cursor: crosshair; }
+        .pending-list.selecting { cursor: crosshair; }
         .pending-item:active { cursor: grabbing; }
         .pending-item.active { border-color: #007bff; }
         .pending-item.bulk-selected { border-color: #ff9800 !important; box-shadow: 0 0 8px rgba(255,152,0,0.8); }
@@ -412,11 +449,20 @@
 
     <!-- 最上部の黒い拡張ヘッダーバー -->
     <div class="top-header-bar">
+        <div class="header-left-tools">
+        <!-- ブラウザの戻る／進むと同じ感覚で、写真を1枚ずつ行き来する -->
+        <div class="photo-nav">
+            <button id="prevPhotoBtn" title="前の写真へ（← キー）" disabled>◀</button>
+            <span id="photoNavLabel">—</span>
+            <button id="nextPhotoBtn" title="次の写真へ（→ キー）" disabled>▶</button>
+        </div>
+
         <!-- 画面一番左の大きめセンター対応タブ -->
         <div class="large-center-tabs">
             <button class="large-center-tab active" data-center="GU1">GU1</button>
             <button class="large-center-tab" data-center="GU2">GU2</button>
             <button class="large-center-tab" data-center="GU4">GU4</button>
+        </div>
         </div>
 
         <!-- 右側のAI連携とシステム設定 -->
@@ -440,6 +486,14 @@
                     <button id="modeVignetteBtn" class="mode-btn">② 背景暗化</button>
                     <button id="modeMaskBtn" class="mode-btn">③ 名前消し</button>
                     <button id="modeArrowBtn" class="mode-btn">④ 矢印・寸法</button>
+                </div>
+
+                <div class="sub-tools" id="viewZoomTools">
+                    <span title="編集画面での見た目だけを拡大します。書き出す画像には影響しません。">🔍 表示</span>
+                    <button id="viewZoomOutBtn" class="btn-secondary" style="padding:2px 7px; font-size:12px;">−</button>
+                    <span id="viewZoomValue" style="min-width:38px; text-align:center; display:inline-block;">100%</span>
+                    <button id="viewZoomInBtn" class="btn-secondary" style="padding:2px 7px; font-size:12px;">＋</button>
+                    <button id="viewZoomResetBtn" class="btn-secondary" style="padding:2px 6px; font-size:10px;">全体表示</button>
                 </div>
 
                 <div id="selectTools" class="sub-tools" style="display: flex;">
@@ -503,7 +557,17 @@
             
             <div class="pending-bar" id="pendingBarArea">
                 <div class="pending-header">
-                    <span><button id="pendingToggleBtn" title="未完了リストの表示・非表示">▾</button> ⏳ 未完了写真: <span id="pendingCount">0</span>件</span>
+                    <span style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+                        <button id="pendingToggleBtn" title="未完了リストの表示・非表示">▾</button>
+                        ⏳ 未完了写真: <span id="pendingCount">0</span>件
+                        <button id="selectAllPendingBtn" class="btn-secondary" style="font-size:10px; padding:2px 6px; margin-left:4px;" title="すべて選択（Ctrl+A）">すべて選択</button>
+                        <select id="thumbSizeSelect" title="サムネイルの大きさ" style="font-size:10px; padding:1px 2px;">
+                            <option value="68">小</option>
+                            <option value="100" selected>中</option>
+                            <option value="140">大</option>
+                            <option value="190">特大</option>
+                        </select>
+                    </span>
                     <div id="pendingBatchTools" style="display:none; gap:6px; align-items:center;">
                         <span style="color:#ff9800;">範囲選択中: <strong id="pendingSelectedCount">0</strong>件</span>
                         <button id="bulkConfirmPendingBtn" class="btn-confirm" style="font-size:10px; padding:2px 6px;">選択分を一括確定</button>
@@ -624,6 +688,10 @@
                         <button id="importDriveBtn" class="btn-secondary" style="font-size:11px;">⬇ このフォルダから写真を読み込む</button>
                         <button id="disconnectDriveBtn" class="btn-secondary" style="font-size:11px; background:#666;">接続を解除</button>
                     </div>
+                    <label class="config-item" style="margin-top:10px; font-weight:bold; color:#00e676;">
+                        <input type="checkbox" id="cfgAutoExportOnConfirm" checked>
+                        <span>確定（Enter・一括確定）したら、200KB以下にして保存先フォルダへ自動で書き出す</span>
+                    </label>
                     <div id="driveStatus" style="font-size:11px; margin-top:8px; color:var(--text-sub);">未接続</div>
                 </div>
 
@@ -663,8 +731,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.9.1-beta';
-        const APP_BUILD = '20260826-1450';
+        const APP_VERSION = '0.9.2-beta';
+        const APP_BUILD = '20260826-1620';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -744,6 +812,7 @@
         const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
         const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
         const cfgAutoAiAnalyze = document.getElementById('cfgAutoAiAnalyze');
+        const cfgAutoExportOnConfirm = document.getElementById('cfgAutoExportOnConfirm');
         const aiStatusBadge = document.getElementById('aiStatusBadge');
         const presetBeginnerBtn = document.getElementById('presetBeginnerBtn');
         const presetExpertBtn = document.getElementById('presetExpertBtn');
@@ -762,7 +831,9 @@
             autoAiAnalyze: true,
             selectedCenter: 'GU1',
             sidebarWidth: 360,
-            pendingCollapsed: false
+            pendingCollapsed: false,
+            thumbSize: 100,
+            autoExportOnConfirm: true
         };
 
         let selectedPendingKeys = new Set();
@@ -786,6 +857,7 @@
             cfgCompactDownloadBtn.checked = uiConfig.compactDownloadBtn;
             cfgShowGuideHints.checked = uiConfig.showGuideHints;
             cfgAutoAiAnalyze.checked = uiConfig.autoAiAnalyze !== false;
+            cfgAutoExportOnConfirm.checked = uiConfig.autoExportOnConfirm !== false;
             geminiApiKeyInput.value = uiConfig.geminiApiKey || '';
 
             undoBtn.style.display = uiConfig.showUndoBtn ? 'inline-block' : 'none';
@@ -917,6 +989,33 @@
         }
         updateWorkAreaLayout();
 
+        // --- サムネイルの大きさ ---
+        const thumbSizeSelect = document.getElementById('thumbSizeSelect');
+        const selectAllPendingBtn = document.getElementById('selectAllPendingBtn');
+
+        function applyThumbSize(px) {
+            const v = parseInt(px, 10) || 100;
+            document.documentElement.style.setProperty('--thumb-size', v + 'px');
+            thumbSizeSelect.value = String(v);
+            // 横並び／下配置の判定は高さと幅に依存するので再計算する
+            requestAnimationFrame(updateWorkAreaLayout);
+        }
+
+        thumbSizeSelect.addEventListener('change', (e) => {
+            uiConfig.thumbSize = parseInt(e.target.value, 10);
+            applyThumbSize(uiConfig.thumbSize);
+            localStorage.setItem('photoStudioUIConfig', JSON.stringify(uiConfig));
+            status.innerText = `未完了写真の表示サイズを変更しました。`;
+        });
+
+        selectAllPendingBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            pendingListFocused = true;
+            selectAllPending();
+        });
+
+        applyThumbSize(uiConfig.thumbSize || 100);
+
         pendingToggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const collapsed = pendingBarArea.classList.toggle('collapsed');
@@ -942,6 +1041,11 @@
 
         cfgAutoAiAnalyze.addEventListener('change', () => {
             uiConfig.autoAiAnalyze = cfgAutoAiAnalyze.checked;
+            saveConfig();
+        });
+
+        cfgAutoExportOnConfirm.addEventListener('change', () => {
+            uiConfig.autoExportOnConfirm = cfgAutoExportOnConfirm.checked;
             saveConfig();
         });
 
@@ -1082,6 +1186,31 @@
         const DB_NAME = "PhotoVaultDB";
         const DB_STORE = "vaultStore";
         let db = null;
+
+        // 選択キーは `${folder.id}_${index}` 形式。folder.id 自体が
+        // `folder_1756...` のようにアンダースコアを含むため、split('_') では
+        // 分解できない（folderId が 'folder' になり、どのフォルダにも一致しなくなる）。
+        // これが原因で一括確定・一括削除が一切動作していなかった。
+        function parseItemKey(key) {
+            const sep = key.lastIndexOf('_');
+            return { folderId: key.slice(0, sep), index: parseInt(key.slice(sep + 1), 10) };
+        }
+
+        // 複数フォルダにまたがる削除でも添字がずれないよう、
+        // フォルダごとに後ろから消す
+        function removeItemsByKeys(keys) {
+            const byFolder = new Map();
+            keys.forEach(k => {
+                const { folderId, index } = parseItemKey(k);
+                if (!byFolder.has(folderId)) byFolder.set(folderId, []);
+                byFolder.get(folderId).push(index);
+            });
+            let n = 0;
+            byFolder.forEach((indexes, folderId) => {
+                indexes.sort((a, b) => b - a).forEach(i => { removeItem(folderId, i); n++; });
+            });
+            return n;
+        }
 
         function updateItemNames() {
             folders.forEach(folder => {
@@ -1888,7 +2017,57 @@
             updateItemNames();
             renderPendingList();
             renderCompletedTree();
+            updatePhotoNavButtons();
         }
+
+        // ============================================================
+        //  写真の「戻る／進む」
+        //  フォルダをまたいで全写真を1列に並べ、その中を1枚ずつ移動する。
+        // ============================================================
+        const prevPhotoBtn = document.getElementById('prevPhotoBtn');
+        const nextPhotoBtn = document.getElementById('nextPhotoBtn');
+        const photoNavLabel = document.getElementById('photoNavLabel');
+
+        function getFlatPhotoList() {
+            const list = [];
+            folders.forEach(f => f.items.forEach((item, index) => list.push({ folderId: f.id, index, item })));
+            return list;
+        }
+
+        function currentFlatIndex(list) {
+            return list.findIndex(e => e.folderId === activeFolderId && e.index === activeItemIndex);
+        }
+
+        function updatePhotoNavButtons() {
+            if (!prevPhotoBtn) return;
+            const list = getFlatPhotoList();
+            const cur = currentFlatIndex(list);
+            prevPhotoBtn.disabled = !(cur > 0);
+            nextPhotoBtn.disabled = !(list.length > 0 && (cur === -1 || cur < list.length - 1));
+            photoNavLabel.innerText = list.length === 0 ? '—'
+                : (cur === -1 ? `- / ${list.length}` : `${cur + 1} / ${list.length}`);
+        }
+
+        function gotoAdjacentPhoto(delta) {
+            const list = getFlatPhotoList();
+            if (!list.length) return;
+            let cur = currentFlatIndex(list);
+            if (cur === -1) cur = delta > 0 ? -1 : list.length;   // 未選択なら端から入る
+            const next = cur + delta;
+            if (next < 0 || next >= list.length) return;
+            loadQueueItem(list[next].folderId, list[next].index);
+        }
+
+        prevPhotoBtn.addEventListener('click', () => gotoAdjacentPhoto(-1));
+        nextPhotoBtn.addEventListener('click', () => gotoAdjacentPhoto(1));
+
+        window.addEventListener('keydown', (e) => {
+            const t = document.activeElement;
+            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (e.key === 'ArrowLeft') { e.preventDefault(); gotoAdjacentPhoto(-1); }
+            else if (e.key === 'ArrowRight') { e.preventDefault(); gotoAdjacentPhoto(1); }
+        });
 
         function renderPendingList() {
             pendingList.innerHTML = '';
@@ -1908,6 +2087,9 @@
                         el.draggable = true;
 
                         el.ondragstart = (e) => {
+                            // 選択モード中は標準ドラッグを止める。
+                            // これを止めないと pointermove が届かず範囲選択が動かない。
+                            if (suppressNativeDrag) { e.preventDefault(); return false; }
                             internalDragActive = true;
                             draggedItemInfo = { folderId: folder.id, index: index };
                             e.dataTransfer.setData('text/plain', item.customName);
@@ -1939,6 +2121,7 @@
                             }
                         };
                         el.onclick = () => {
+                            if (suppressNextClick) return;   // 範囲選択ドラッグ直後の click は無視
                             if (selectedPendingKeys.size > 0) {
                                 if (selectedPendingKeys.has(itemKey)) selectedPendingKeys.delete(itemKey);
                                 else selectedPendingKeys.add(itemKey);
@@ -1972,51 +2155,99 @@
             });
         }
 
-        // --- 未完了リストでのドラッグ範囲一括選択ロジック ---
+        // ============================================================
+        //  未完了リストの一括選択
+        //
+        //  旧実装が動かなかった原因は3つ:
+        //   (1) サムネイルに draggable=true が付いており、押して動かすと
+        //       ブラウザ標準のドラッグ（並び替え）が始まってしまい、
+        //       pointermove が届かなくなって範囲選択が更新されなかった
+        //   (2) 長押し判定中に10px動くとタイマーを取り消していたため、
+        //       「押しながら動かす」という自然な操作では選択に入れなかった
+        //   (3) 選択ドラッグの直後に click が発火し、選択が解除されていた
+        //
+        //  操作方法:
+        //   ・写真を長押し(250ms) → 選択モードに入り、そのままドラッグで範囲選択
+        //   ・空きスペースからドラッグ / Ctrl+ドラッグ → 範囲選択
+        //   ・Ctrl+A → 全選択、Esc → 解除
+        // ============================================================
         let isPendingSelecting = false;
         let pendingSelectStartPos = { x: 0, y: 0 };
         let pendingLongPressTimer = null;
+        let suppressNativeDrag = false;   // 選択モード中は標準ドラッグを止める
+        let suppressNextClick = false;    // 選択ドラッグ直後の click を無視する
+        let pendingListFocused = false;   // Ctrl+A の対象かどうか
+        let pendingPressedKey = null;
+
+        // 範囲選択ドラッグ直後の click を握りつぶす。
+        // タイマーで解除すると発火順が環境依存になるため、
+        // 「次に押し下げるまで」を有効期間にしている。
+        pendingList.addEventListener('click', (e) => {
+            if (suppressNextClick) {
+                suppressNextClick = false;
+                e.stopPropagation();
+                e.preventDefault();
+            }
+        }, true);
 
         pendingList.addEventListener('pointerdown', (e) => {
             if (e.button !== 0) return;
+            suppressNextClick = false;
+            if (e.target.closest('.pending-btn')) return;   // 🗑 / ✏️ は対象外
 
+            pendingListFocused = true;
             pendingSelectStartPos = { x: e.clientX, y: e.clientY };
-            const isCtrl = e.ctrlKey || e.metaKey;
 
-            if (isCtrl) {
+            const onItem = e.target.closest('.pending-item');
+            const isCtrl = e.ctrlKey || e.metaKey;
+            pendingPressedKey = onItem ? onItem.getAttribute('data-pending-key') : null;
+
+            // Ctrl+ドラッグ、または空きスペースからのドラッグは即座に範囲選択を開始
+            if (isCtrl || !onItem) {
                 startPendingSelection(e);
-            } else {
-                pendingLongPressTimer = setTimeout(() => {
-                    startPendingSelection(e);
-                }, 220);
+                return;
             }
+
+            // 写真の上での長押し → 選択モードへ入り、その写真自体も選択する
+            clearTimeout(pendingLongPressTimer);
+            pendingLongPressTimer = setTimeout(() => {
+                pendingLongPressTimer = null;
+                if (pendingPressedKey) selectedPendingKeys.add(pendingPressedKey);
+                startPendingSelection(e);
+                updatePendingSelectionUI();
+                status.innerText = "選択モード: そのままドラッグで範囲選択／Ctrl+A で全選択";
+            }, 250);
         });
 
         function startPendingSelection(e) {
             isPendingSelecting = true;
+            suppressNativeDrag = true;      // ← これが無いと標準ドラッグに奪われる
+            pendingList.classList.add('selecting');
+            try { pendingList.setPointerCapture(e.pointerId); } catch (err) {}
             pendingSelectBox.style.display = 'block';
-            pendingSelectBox.style.left = `${e.clientX}px`;
-            pendingSelectBox.style.top = `${e.clientY}px`;
+            pendingSelectBox.style.left = `${pendingSelectStartPos.x}px`;
+            pendingSelectBox.style.top = `${pendingSelectStartPos.y}px`;
             pendingSelectBox.style.width = '0px';
             pendingSelectBox.style.height = '0px';
         }
 
         window.addEventListener('pointermove', (e) => {
+            // 長押し判定中の移動ではタイマーを取り消さない。
+            // 大きく動いた場合だけ「並び替えドラッグ」とみなす。
             if (pendingLongPressTimer) {
-                if (Math.hypot(e.clientX - pendingSelectStartPos.x, e.clientY - pendingSelectStartPos.y) > 10) {
+                if (Math.hypot(e.clientX - pendingSelectStartPos.x, e.clientY - pendingSelectStartPos.y) > 40) {
                     clearTimeout(pendingLongPressTimer);
                     pendingLongPressTimer = null;
                 }
             }
 
             if (!isPendingSelecting) return;
+            e.preventDefault();
 
-            const currentX = e.clientX;
-            const currentY = e.clientY;
-            const left = Math.min(pendingSelectStartPos.x, currentX);
-            const top = Math.min(pendingSelectStartPos.y, currentY);
-            const width = Math.abs(currentX - pendingSelectStartPos.x);
-            const height = Math.abs(currentY - pendingSelectStartPos.y);
+            const left = Math.min(pendingSelectStartPos.x, e.clientX);
+            const top = Math.min(pendingSelectStartPos.y, e.clientY);
+            const width = Math.abs(e.clientX - pendingSelectStartPos.x);
+            const height = Math.abs(e.clientY - pendingSelectStartPos.y);
 
             pendingSelectBox.style.left = `${left}px`;
             pendingSelectBox.style.top = `${top}px`;
@@ -2026,31 +2257,74 @@
             const boxRect = { left, top, right: left + width, bottom: top + height };
 
             document.querySelectorAll('.pending-item').forEach(itemEl => {
-                const itemRect = itemEl.getBoundingClientRect();
+                const r = itemEl.getBoundingClientRect();
                 const key = itemEl.getAttribute('data-pending-key');
-                const isIntersect = !(boxRect.right < itemRect.left || 
-                                     boxRect.left > itemRect.right || 
-                                     boxRect.bottom < itemRect.top || 
-                                     boxRect.top > itemRect.bottom);
-                if (isIntersect) {
-                    selectedPendingKeys.add(key);
-                } else if (!e.ctrlKey) {
-                    selectedPendingKeys.delete(key);
-                }
+                const hit = !(boxRect.right < r.left || boxRect.left > r.right ||
+                              boxRect.bottom < r.top || boxRect.top > r.bottom);
+                if (hit) selectedPendingKeys.add(key);
+                else if (!e.ctrlKey && key !== pendingPressedKey) selectedPendingKeys.delete(key);
             });
             updatePendingSelectionUI();
-        });
+        }, { passive: false });
 
-        window.addEventListener('pointerup', () => {
+        window.addEventListener('pointerup', (e) => {
             if (pendingLongPressTimer) {
                 clearTimeout(pendingLongPressTimer);
                 pendingLongPressTimer = null;
             }
             if (isPendingSelecting) {
                 isPendingSelecting = false;
+                suppressNativeDrag = false;
+                suppressNextClick = true;   // 直後の click で選択が解除されるのを防ぐ
+                pendingList.classList.remove('selecting');
+                try { pendingList.releasePointerCapture(e.pointerId); } catch (err) {}
                 pendingSelectBox.style.display = 'none';
+                if (selectedPendingKeys.size > 0) {
+                    status.innerText = `${selectedPendingKeys.size} 件を選択中（「選択分を一括確定」で確定できます）`;
+                }
+            }
+            pendingPressedKey = null;
+        });
+
+        // --- 全選択 / 解除 ---
+        function selectAllPending() {
+            selectedPendingKeys.clear();
+            let n = 0;
+            folders.forEach(folder => {
+                folder.items.forEach((item, index) => {
+                    if (!item.isDone) { selectedPendingKeys.add(`${folder.id}_${index}`); n++; }
+                });
+            });
+            updatePendingSelectionUI();
+            status.innerText = n
+                ? `未完了の写真 ${n} 件をすべて選択しました。`
+                : "未完了の写真がありません。";
+            return n;
+        }
+
+        // 未完了リストを触った後の Ctrl+A で全選択する
+        window.addEventListener('keydown', (e) => {
+            const t = document.activeElement;
+            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                if (pendingListFocused || selectedPendingKeys.size > 0) {
+                    e.preventDefault();
+                    selectAllPending();
+                }
+            } else if (e.key === 'Escape' && selectedPendingKeys.size > 0) {
+                selectedPendingKeys.clear();
+                updatePendingSelectionUI();
+                status.innerText = "選択を解除しました。";
             }
         });
+
+        // 未完了リスト以外を触ったら Ctrl+A の対象から外す
+        document.addEventListener('pointerdown', (e) => {
+            if (!e.target.closest('#pendingList') && !e.target.closest('#pendingBatchTools')) {
+                pendingListFocused = false;
+            }
+        }, true);
 
         clearPendingSelectionBtn.addEventListener('click', () => {
             selectedPendingKeys.clear();
@@ -2060,17 +2334,12 @@
         bulkDeletePendingBtn.addEventListener('click', () => {
             if (selectedPendingKeys.size === 0) return;
             if (confirm(`選択した ${selectedPendingKeys.size} 件の未完了写真を削除しますか？`)) {
-                let targets = Array.from(selectedPendingKeys).map(key => {
-                    const [folderId, idxStr] = key.split('_');
-                    return { folderId, index: parseInt(idxStr) };
-                }).sort((a, b) => b.index - a.index);
-
-                targets.forEach(t => removeItem(t.folderId, t.index));
+                const removed = removeItemsByKeys(Array.from(selectedPendingKeys));
                 selectedPendingKeys.clear();
                 updatePendingSelectionUI();
                 renderUI();
                 saveToDB();
-                status.innerText = "範囲選択された未完了写真を削除しました。";
+                status.innerText = `選択した ${removed} 件の未完了写真を削除しました。(Ctrl+Zで復元可能)`;
             }
         });
 
@@ -2078,19 +2347,19 @@
             if (selectedPendingKeys.size === 0) return;
             status.innerText = `${selectedPendingKeys.size} 件の写真を一括確定処理中 (200KB以下最適化)...`;
 
-            let n = 0, total = 0;
+            let n = 0, total = 0, exported = 0;
             const totalCount = selectedPendingKeys.size;
 
             for (const key of selectedPendingKeys) {
-                const [folderId, idxStr] = key.split('_');
+                const { folderId, index: idx } = parseItemKey(key);
                 const folder = folders.find(f => f.id === folderId);
-                const idx = parseInt(idxStr);
                 if (folder && folder.items[idx]) {
                     const item = folder.items[idx];
                     const blob = await processSingleItemBlob(item);
                     item.editedBlob = blob;
                     item.isDone = true;
                     await persistPhoto(item);      // 確定画像をDBへ保存
+                    if (await autoExportOne(folder, item)) exported++;
                     n++;
                     total += blob ? blob.size : 0;
                     status.innerText = `一括確定中... (${n}/${totalCount})`;
@@ -2102,7 +2371,8 @@
             renderUI();
             saveToDB();
             status.innerText = n
-                ? `${n} 件を確定しました（合計 ${formatSize(total)} / 平均 ${formatSize(Math.round(total / n))}・すべて200KB以下）`
+                ? `${n} 件を確定し右パネルへ移動しました（合計 ${formatSize(total)} / 平均 ${formatSize(Math.round(total / n))}・すべて200KB以下）`
+                    + (exported ? `／📂 ${driveHandle.name} へ ${exported} 件書き出し` : '')
                 : "確定できる写真がありませんでした。";
         });
 
@@ -2316,15 +2586,7 @@
         deleteSelectedBtn.addEventListener('click', () => {
             if (selectedItemKeys.size === 0) return;
             if (confirm(`選択した ${selectedItemKeys.size} 件の写真を削除しますか？`)) {
-                let targets = Array.from(selectedItemKeys).map(key => {
-                    const [folderId, idxStr] = key.split('_');
-                    return { folderId, index: parseInt(idxStr) };
-                }).sort((a, b) => b.index - a.index);
-
-                targets.forEach(t => {
-                    removeItem(t.folderId, t.index);
-                });
-
+                removeItemsByKeys(Array.from(selectedItemKeys));
                 selectedItemKeys.clear();
                 updateItemNames();
                 renderUI();
@@ -2935,6 +3197,21 @@
             const item = getActiveItem();
             if (!item || !item.img) return;
 
+            // 通常のホイールは「見た目だけ」の拡大縮小（書き出す画像は変わらない）。
+            // 写真そのものを拡大縮小したい場合は Shift を押しながら回す。
+            if (!e.shiftKey) {
+                let d = e.deltaY;
+                if (e.deltaMode === 1) d *= 16; else if (e.deltaMode === 2) d *= 100;
+                const idx = VIEW_ZOOM_STEPS.findIndex(s => s > viewZoom + 0.001);
+                if (d < 0) {
+                    setViewZoom(idx === -1 ? 8 : VIEW_ZOOM_STEPS[idx]);
+                } else {
+                    const lower = VIEW_ZOOM_STEPS.filter(s => s < viewZoom - 0.001);
+                    setViewZoom(lower.length ? lower[lower.length - 1] : 1);
+                }
+                return;
+            }
+
             // ホイールを回し始めた時だけ履歴を1回とる（Ctrl+Z で回す前に戻せる）
             if (!wheelGestureActive) { saveState(); wheelGestureActive = true; }
 
@@ -2956,7 +3233,7 @@
             }
 
             applyImageTransform({ history: false, persist: false });
-            status.innerText = `拡大率 ${Math.round(currentImageScale * 100)}%（ホイールで拡大縮小 / ドラッグで移動 / ダブルクリックで等倍）`;
+            status.innerText = `写真そのものの倍率 ${Math.round(currentImageScale * 100)}%（これは書き出す画像に反映されます）`;
 
             clearTimeout(wheelEndTimer);
             wheelEndTimer = setTimeout(() => {
@@ -2975,6 +3252,77 @@
             applyImageTransform();
             status.innerText = "写真を等倍・中央に戻しました。";
         });
+
+        // ============================================================
+        //  表示専用ズーム
+        //  キャンバスの中身（1200x1200）には一切触れず、画面上の表示倍率だけを変える。
+        //  そのため書き出される画像は変わらない。
+        //  拡大時は枠がスクロールできるようになり、ドラッグではなく
+        //  スクロールバー／ホイールで見たい場所へ移動できる。
+        // ============================================================
+        const viewZoomValue = document.getElementById('viewZoomValue');
+        const viewZoomInBtn = document.getElementById('viewZoomInBtn');
+        const viewZoomOutBtn = document.getElementById('viewZoomOutBtn');
+        const viewZoomResetBtn = document.getElementById('viewZoomResetBtn');
+        const VIEW_ZOOM_STEPS = [1, 1.25, 1.5, 2, 3, 4, 6, 8];
+        let viewZoom = 1;
+
+        function applyViewZoom(keepCenter) {
+            const cont = dropArea;
+            const prevCx = cont.scrollLeft + cont.clientWidth / 2;
+            const prevCy = cont.scrollTop + cont.clientHeight / 2;
+            const prevW = canvas.offsetWidth || 1;
+
+            if (viewZoom <= 1.001) {
+                canvas.style.width = '';
+                canvas.style.height = '';
+                canvas.style.maxWidth = '';
+                canvas.style.maxHeight = '';
+                cont.style.overflow = 'hidden';
+            } else {
+                // 「全体表示」の大きさを基準に倍率をかける
+                const base = Math.min(cont.clientWidth, cont.clientHeight);
+                const px = Math.round(base * viewZoom);
+                canvas.style.maxWidth = 'none';
+                canvas.style.maxHeight = 'none';
+                canvas.style.width = px + 'px';
+                canvas.style.height = px + 'px';
+                cont.style.overflow = 'auto';
+            }
+
+            viewZoomValue.innerText = Math.round(viewZoom * 100) + '%';
+            viewZoomValue.style.color = viewZoom > 1.001 ? '#00bcd4' : '';
+
+            if (keepCenter && viewZoom > 1.001) {
+                const ratio = (canvas.offsetWidth || 1) / prevW;
+                cont.scrollLeft = prevCx * ratio - cont.clientWidth / 2;
+                cont.scrollTop = prevCy * ratio - cont.clientHeight / 2;
+            }
+        }
+
+        function setViewZoom(z, keepCenter) {
+            viewZoom = Math.min(Math.max(z, 1), 8);
+            applyViewZoom(keepCenter !== false);
+            if (viewZoom > 1.001) {
+                status.innerText = `表示 ${Math.round(viewZoom * 100)}%（見た目だけの拡大です。書き出す画像は変わりません）`;
+            }
+        }
+
+        viewZoomInBtn.addEventListener('click', () => {
+            const next = VIEW_ZOOM_STEPS.find(s => s > viewZoom + 0.001);
+            setViewZoom(next || 8);
+        });
+        viewZoomOutBtn.addEventListener('click', () => {
+            const lower = VIEW_ZOOM_STEPS.filter(s => s < viewZoom - 0.001);
+            setViewZoom(lower.length ? lower[lower.length - 1] : 1);
+        });
+        viewZoomResetBtn.addEventListener('click', () => {
+            setViewZoom(1);
+            status.innerText = "全体表示に戻しました。";
+        });
+
+        window.addEventListener('resize', () => applyViewZoom(false));
+        if (window.ResizeObserver) new ResizeObserver(() => applyViewZoom(false)).observe(dropArea);
 
         modeSelectBtn.addEventListener('click', () => setMode('select'));
         modeVignetteBtn.addEventListener('click', () => setMode('vignette'));
@@ -3950,6 +4298,27 @@
             handleFiles(files, driveHandle.name);
         });
 
+        // --- 確定した1枚を保存先フォルダへ書き出す（同名なら上書き）---
+        //     フォルダが未接続、または設定がOFFの時は何もしない。
+        async function autoExportOne(folder, item) {
+            if (!driveHandle || !uiConfig.autoExportOnConfirm) return null;
+            if (!item || !item.editedBlob) return null;
+
+            try {
+                if (!await ensureDrivePermission('readwrite')) return null;
+                const sub = await driveHandle.getDirectoryHandle(sanitizeName(folder.name), { create: true });
+                // create:true は既にあれば既存を返すので、書き込みは上書きになる
+                const fh = await sub.getFileHandle(`${sanitizeName(item.customName)}.jpg`, { create: true });
+                const w = await fh.createWritable();
+                await w.write(item.editedBlob);
+                await w.close();
+                return `${sanitizeName(folder.name)}/${sanitizeName(item.customName)}.jpg`;
+            } catch (e) {
+                console.error("自動書き出しに失敗:", item.customName, e);
+                return null;
+            }
+        }
+
         // --- 確定済みの写真をフォルダへ直接書き出す ---
         exportDriveBtn.addEventListener('click', async () => {
             if (!driveHandle) { alert("先に「⚙️ システム設定」から保存先フォルダを選んでください。"); return; }
@@ -4063,8 +4432,12 @@
             await persistPhoto(confirmedItem);
             saveToDB();
 
+            // 保存先フォルダが接続されていれば、そのまま書き出す（同名は上書き）
+            const exported = await autoExportOne(folder, confirmedItem);
+
             const sizeText = `${confirmedItem.customName}: ${formatSize(bestBlob ? bestBlob.size : 0)}`
-                + (bestBlob && bestBlob.size <= 200 * 1024 ? '（200KB以下 ✓）' : '（⚠ 200KB超）');
+                + (bestBlob && bestBlob.size <= 200 * 1024 ? '（200KB以下 ✓）' : '（⚠ 200KB超）')
+                + (exported ? ` → 📂 ${exported} へ書き出し` : '');
 
             triggerSlideToRightAnimation(() => {
                 const nextIndex = folder.items.findIndex((item, idx) => idx > activeItemIndex && !item.isDone);
