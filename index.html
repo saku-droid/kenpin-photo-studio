@@ -1,0 +1,3685 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>検品画像一括処理スタジオ</title>
+    <!-- JSZipライブラリ（ZIP一括出力用） -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        /* テーマ変数定義 */
+        :root {
+            --bg-body: #181818;
+            --bg-panel: #222222;
+            --bg-subpanel: #2a2a2a;
+            --bg-control: #333333;
+            --text-main: #ffffff;
+            --text-sub: #aaa;
+            --border-color: #444444;
+            --border-sub: #3d3d3d;
+            --canvas-bg: #111111;
+        }
+
+        body.theme-white {
+            --bg-body: #f0f2f5;
+            --bg-panel: #ffffff;
+            --bg-subpanel: #f8f9fa;
+            --bg-control: #e9ecef;
+            --text-main: #111111;
+            --text-sub: #555555;
+            --border-color: #cccccc;
+            --border-sub: #dddddd;
+            --canvas-bg: #e0e0e0;
+        }
+
+        html, body {
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            margin: 0;
+            padding: 8px 12px;
+            box-sizing: border-box;
+            font-family: sans-serif; 
+            background: var(--bg-body); 
+            color: var(--text-main); 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            user-select: none; 
+            transition: background 0.3s, color 0.2s;
+        }
+        
+        /* 画面上部の黒い拡張余白バー */
+        .top-header-bar {
+            width: 100%;
+            max-width: 1600px;
+            height: 42px;
+            background: #000000;
+            border-radius: 8px;
+            padding: 4px 12px;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-sizing: border-box;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            flex-shrink: 0;
+        }
+
+        /* 画面一番左の大きめセンター対応タブ */
+        .large-center-tabs {
+            display: flex;
+            gap: 6px;
+            background: #222222;
+            padding: 3px;
+            border-radius: 6px;
+            border: 1px solid #444;
+        }
+
+        .large-center-tab {
+            background: transparent;
+            color: #888888;
+            padding: 6px 18px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .large-center-tab:hover {
+            color: #ffffff;
+            background: #333333;
+        }
+
+        .large-center-tab.active {
+            background: #007bff;
+            color: #ffffff;
+            box-shadow: 0 2px 6px rgba(0,123,255,0.4);
+        }
+
+        .header-right-tools {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .ai-status-badge {
+            background: rgba(0, 230, 118, 0.15);
+            color: #00e676;
+            border: 1px solid #00e676;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 3px 8px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* 表示中のバージョン。キャッシュで古い版が出ていないかを一目で確認するためのもの */
+        #appVersion {
+            font-size: 10px;
+            font-family: monospace;
+            color: #888888;
+            background: #1a1a1a;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            padding: 3px 7px;
+            cursor: help;
+            white-space: nowrap;
+        }
+
+        .btn-config-main {
+            background: #ff9800;
+            color: #ffffff;
+            border: none;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-config-main:hover {
+            background: #e08600;
+        }
+
+        .app-container {
+            display: flex;
+            gap: 0;
+            width: 100%;
+            max-width: 1600px;
+            height: calc(100vh - 68px);
+            flex-shrink: 0;
+        }
+
+        /* 作業スペースと保管庫の間の仕切り（左右にドラッグで幅を変えられる） */
+        .splitter {
+            flex: 0 0 12px;
+            cursor: col-resize;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+        }
+        .splitter::before {
+            content: '';
+            width: 4px;
+            height: 46px;
+            border-radius: 2px;
+            background: var(--border-color);
+            transition: background 0.15s, height 0.15s;
+        }
+        .splitter:hover::before, .splitter.dragging::before { background: #007bff; height: 90px; }
+        body.splitter-active { cursor: col-resize; user-select: none; }
+
+        .main-workspace {
+            flex: 1 1 0;
+            min-width: 0;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            background: var(--bg-panel); 
+            border-radius: 8px; 
+            padding: 10px; 
+            box-sizing: border-box; 
+            overflow: hidden; 
+            position: relative; 
+            border: 1px solid var(--border-color);
+        }
+
+        /* ボタンが単語の途中で折り返して読めなくなるのを防ぐ */
+        .controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; align-items: center; margin-bottom: 6px; width: 100%; }
+        .controls button, .controls label, .controls select, .controls span { white-space: nowrap; }
+        .controls > * { flex: 0 0 auto; }
+        .mode-selector { background: var(--bg-control); padding: 3px; border-radius: 6px; display: flex; gap: 3px; flex-shrink: 0; }
+        .mode-btn { background: transparent; color: var(--text-sub); padding: 5px 10px; font-weight: bold; border: none; cursor: pointer; font-size: 12px; white-space: nowrap; }
+        .mode-btn.active { background: #007bff; color: #fff; border-radius: 4px; }
+        
+        button, select, input[type="range"], input[type="color"] { padding: 5px 10px; font-size: 12px; cursor: pointer; border-radius: 5px; border: none; }
+        .btn-confirm { background: #28a745; color: white; font-weight: bold; }
+        .btn-confirm:hover { background: #218838; }
+        .btn-secondary { background: #555; color: white; }
+        .btn-secondary:hover { background: #666; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { background: #bd2130; }
+        .btn-compare { background: #6f42c1; color: white; font-weight: bold; }
+        .btn-compare:hover { background: #593196; }
+        .btn-drive { background: #4285f4; color: white; font-weight: bold; }
+        .btn-drive:hover { background: #3367d6; }
+        .btn-zip { background: #ff9800; color: white; font-weight: bold; }
+        .btn-zip:hover { background: #e08600; }
+        
+        .sub-tools { display: flex; gap: 6px; align-items: center; background: var(--bg-control); padding: 3px 8px; border-radius: 6px; font-size: 11px; }
+        .color-preview { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; display: inline-block; vertical-align: middle; }
+
+        .canvas-container { 
+            flex: 1; 
+            width: 100%; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            background: var(--canvas-bg); 
+            border: 2px dashed var(--border-color); 
+            border-radius: 8px; 
+            position: relative; 
+            overflow: hidden; 
+            min-height: 0; 
+            touch-action: none; 
+        }
+        .canvas-container.dragover, .sidebar.dragover { border-color: #007bff; background: rgba(0, 123, 255, 0.15); }
+        canvas { touch-action: none; max-width: 100%; max-height: 100%; object-fit: contain; display: block; z-index: 1; }
+        
+        /* 写真の右真上のダウンロードボタン */
+        .btn-canvas-dl {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 12;
+            background: rgba(23, 162, 184, 0.9);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 5px 9px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            transition: background 0.2s, opacity 0.2s;
+        }
+        .btn-canvas-dl:hover { background: rgba(23, 162, 184, 1); }
+        .btn-canvas-dl:disabled { opacity: 0.3; cursor: not-allowed; }
+        .dl-triple-chevron {
+            display: inline-block;
+            transform: rotate(-90deg);
+            font-weight: 900;
+            font-family: monospace, sans-serif;
+            letter-spacing: -3px;
+            margin-right: 2px;
+            font-size: 13px;
+            line-height: 1;
+        }
+
+        .pending-bar { 
+            width: 100%; 
+            height: 105px; 
+            background: var(--bg-subpanel); 
+            border-radius: 6px; 
+            margin-top: 6px; 
+            padding: 6px; 
+            box-sizing: border-box; 
+            display: flex; 
+            flex-direction: column; 
+            border: 1px solid var(--border-sub); 
+            position: relative;
+        }
+        .pending-header { font-size: 11px; font-weight: bold; color: #ff9800; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+        .pending-list { flex: 1; display: flex; gap: 6px; overflow-x: auto; align-items: center; padding-bottom: 4px; position: relative; touch-action: none; }
+        .pending-item { width: 68px; height: 68px; flex-shrink: 0; background: var(--bg-control); border-radius: 4px; border: 2px solid transparent; cursor: grab; position: relative; overflow: hidden; transition: border-color 0.2s, box-shadow 0.2s; }
+        .pending-item:active { cursor: grabbing; }
+        .pending-item.active { border-color: #007bff; }
+        .pending-item.bulk-selected { border-color: #ff9800 !important; box-shadow: 0 0 8px rgba(255,152,0,0.8); }
+        .pending-item img { width: 100%; height: 100%; object-fit: cover; }
+        .pending-item .title { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0, 0, 0, 0.75); color: #fff; font-size: 9px; padding: 1px 3px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+        .pending-item .pending-rename { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0; font-size: 9px; line-height: 1; border: none; border-radius: 3px; background: rgba(0,0,0,0.6); color: #fff; cursor: pointer; opacity: 0; transition: opacity 0.15s, background 0.15s; }
+        .pending-item:hover .pending-rename { opacity: 1; }
+        .pending-item .pending-rename:hover { background: #ff9800; }
+        .pending-item.named .title { background: rgba(255,152,0,0.85); font-weight: bold; }
+
+        .pending-select-box {
+            position: fixed;
+            border: 2px dashed #00bcd4;
+            background: rgba(0, 188, 212, 0.2);
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+
+        .sidebar { flex: 0 0 auto; width: 360px; min-width: 200px; background: var(--bg-panel); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; box-sizing: border-box; border: 1px solid var(--border-color); position: relative; }
+        .sidebar-toolbar > div { flex-shrink: 0; }
+        .sidebar-toolbar button { white-space: nowrap; }
+        
+        .sidebar-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); gap: 4px; }
+        .completed-tree { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+        
+        .folder-node { background: var(--bg-subpanel); border-radius: 6px; border: 1px solid var(--border-sub); overflow: hidden; }
+        .folder-node.drag-over { border-color: #007bff; background: rgba(0, 123, 255, 0.1); }
+        .folder-header { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--bg-control); cursor: pointer; font-size: 11px; font-weight: bold; color: var(--text-main); }
+        .folder-node.active-folder .folder-header { background: #1e3a5f; color: #00bcd4; border-left: 3px solid #00bcd4; }
+        .folder-title { flex: 1; display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .folder-items { padding: 4px 6px; display: flex; flex-direction: column; gap: 4px; background: var(--bg-panel); min-height: 20px; }
+
+        .queue-item { display: flex; align-items: center; gap: 6px; background: var(--bg-subpanel); padding: 4px; border-radius: 4px; border: 1px solid transparent; cursor: grab; position: relative; font-size: 11px; }
+        .queue-item.active { border-color: #007bff; background: #1e3a5f; color: #fff; }
+        .queue-item.selected { border-color: #dc3545; background: #4a1c1d; color: #fff; }
+        .queue-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 3px; }
+        .queue-item .info { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+        .queue-item .filename { text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-weight: bold; }
+
+        .item-actions { display: flex; gap: 2px; align-items: center; }
+        .icon-btn { width: 20px; height: 20px; border-radius: 3px; border: none; background: #444; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 10px; line-height: 1; }
+        .icon-btn:hover { background: #666; }
+        .icon-btn.edit-btn:hover { background: #ff9800; }
+        .icon-btn.dl-btn:hover { background: #17a2b8; }
+        .icon-btn.del-btn:hover { background: #dc3545; }
+
+        .flying-thumbnail {
+            position: fixed;
+            z-index: 9999;
+            pointer-events: none;
+            transition: all 0.45s cubic-bezier(0.2, 0.8, 0.25, 1);
+            border-radius: 6px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+            border: 2px solid #28a745;
+            object-fit: cover;
+        }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.85); z-index: 1000; display: none; justify-content: center; align-items: center; }
+        .modal-content { background: var(--bg-panel); color: var(--text-main); border-radius: 10px; width: 92%; max-width: 1100px; max-height: 88vh; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; border: 1px solid var(--border-color); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 8px; }
+        .modal-body { flex: 1; overflow-y: auto; }
+        .vault-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+        .vault-table th, .vault-table td { padding: 8px; border-bottom: 1px solid var(--border-color); }
+        .vault-table th { background: var(--bg-subpanel); color: var(--text-sub); position: sticky; top: 0; z-index: 5; }
+        .vault-table img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; }
+
+        .config-card { background: var(--bg-subpanel); border-radius: 8px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border-sub); }
+        .config-group { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+        .config-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+        #compareBadge { position: absolute; top: 12px; left: 12px; background: rgba(111, 66, 193, 0.9); color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; display: none; pointer-events: none; z-index: 10; }
+        #dropOverlay { position: absolute; pointer-events: none; color: var(--text-sub); font-size: 14px; font-weight: bold; text-align: center; z-index: 0; }
+        #status { margin-top: 4px; font-size: 12px; color: #00e676; text-align: center; }
+        .selection-bar { display: none; gap: 6px; align-items: center; background: #dc3545; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-bottom: 6px; }
+    </style>
+</head>
+<body>
+
+    <!-- ドラッグ範囲選択用の矩形要素 -->
+    <div id="pendingSelectBox" class="pending-select-box"></div>
+
+    <!-- 最上部の黒い拡張ヘッダーバー -->
+    <div class="top-header-bar">
+        <!-- 画面一番左の大きめセンター対応タブ -->
+        <div class="large-center-tabs">
+            <button class="large-center-tab active" data-center="GU1">GU1</button>
+            <button class="large-center-tab" data-center="GU2">GU2</button>
+            <button class="large-center-tab" data-center="GU4">GU4</button>
+        </div>
+
+        <!-- 右側のAI連携とシステム設定 -->
+        <div class="header-right-tools">
+            <span id="aiStatusBadge" class="ai-status-badge" style="display:none;">🤖 AI連携</span>
+            <span id="appVersion" title="表示中のバージョン。修正が反映されない時は Ctrl+Shift+R で再読み込みしてください。">v—</span>
+            <button id="openConfigBtn" class="btn-config-main">⚙️ システム設定</button>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <div class="main-workspace">
+            <div class="controls">
+                <input type="file" id="upload" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.jfif,.heic,.heif,.tif,.tiff" multiple style="display:none;">
+                <input type="file" id="folderUpload" webkitdirectory directory multiple style="display:none;">
+                <button onclick="document.getElementById('upload').click()" class="btn-secondary">ファイル選択</button>
+                <button onclick="document.getElementById('folderUpload').click()" class="btn-secondary" style="margin-left:2px;">📁 フォルダ選択</button>
+                
+                <div class="mode-selector">
+                    <button id="modeSelectBtn" class="mode-btn active" style="color:#00bcd4;">① 選択・移動</button>
+                    <button id="modeVignetteBtn" class="mode-btn">② 背景暗化</button>
+                    <button id="modeMaskBtn" class="mode-btn">③ 名前消し</button>
+                    <button id="modeArrowBtn" class="mode-btn">④ 矢印・寸法</button>
+                </div>
+
+                <div id="selectTools" class="sub-tools" style="display: flex;">
+                    <label><input type="checkbox" id="showGridCheck" checked> 補助線 (十字・井の字)</label>
+                    <label style="margin-left:6px;"><input type="checkbox" id="enableSnapCheck" checked> 磁石吸着・余白防止</label>
+                    <button id="fitCoverBtn" class="btn-secondary" style="font-size:10px; padding:2px 6px; margin-left:4px; background:#007bff; color:#fff;">余白ゼロ全画面フィット</button>
+                </div>
+
+                <div id="vignetteTools" class="sub-tools" style="display: none;">
+                    <label>外側の暗さ:</label>
+                    <input type="range" id="darknessSlider" min="0.1" max="0.9" step="0.05" value="0.70">
+                    <span id="darknessValue">70%</span>
+                </div>
+
+                <div id="brushTools" class="sub-tools" style="display: none;">
+                    <button id="eyedropperBtn" style="background:#ff9800; color:#fff;">スポイト</button>
+                    <span id="colorDisplay" class="color-preview" style="background: #E0E0E0;"></span>
+                    <select id="brushSizeSelect">
+                        <option value="15">細 (15px)</option>
+                        <option value="30" selected>中 (30px)</option>
+                        <option value="60">太 (60px)</option>
+                        <option value="100">極太 (100px)</option>
+                    </select>
+                </div>
+
+                <div id="arrowTools" class="sub-tools" style="display: none;">
+                    <label>向き:</label>
+                    <select id="arrowTypeSelect">
+                        <option value="single" selected>片方向 ➔</option>
+                        <option value="double">双方向 ↔</option>
+                    </select>
+                    <label style="margin-left:4px;">色:</label>
+                    <input type="color" id="arrowColorPicker" value="#ff0000" style="width:28px; height:22px; padding:0; cursor:pointer;">
+                    <button id="arrowEyedropperBtn" style="background:#ff9800; color:#fff; padding:2px 6px; font-size:10px;">画像からスポイト</button>
+                    <button id="autoWidthBtn" style="background:#00bcd4; color:#fff; padding:2px 8px; font-size:10px; font-weight:bold;">🎯 色で幅を自動計測</button>
+                    <label style="margin-left:2px;">色の許容差:</label>
+                    <input type="range" id="colorToleranceSlider" min="10" max="130" step="5" value="45" style="width:66px;">
+                    <span id="colorToleranceValue">45</span>
+                    <button id="clearArrowsBtn" class="btn-danger" style="font-size:10px; padding:2px 6px;">全矢印消去</button>
+                </div>
+
+                <button id="compareBtn" class="btn-compare" disabled> Before比較 (長押し)</button>
+                <button id="confirmBtn" class="btn-confirm" disabled>確定して完了へ (Enter)</button>
+                <button id="undoBtn" class="btn-secondary" disabled>戻す (Ctrl+Z)</button>
+            </div>
+
+            <div class="canvas-container" id="dropArea">
+                <div id="compareBadge">BEFORE (元画像)</div>
+                <div id="dropOverlay">ここに画像またはフォルダをドラッグ＆ドロップ<br>（フォルダ内サブフォルダも全自動スキャン読み込み対応）</div>
+                
+                <!-- 写真の右真上のダウンロードボタン -->
+                <button id="downloadSingleBtn" class="btn-canvas-dl" disabled title="この1枚をDL">
+                    <span class="dl-triple-chevron">&gt;&gt;&gt;</span>
+                    <span id="dlBtnText">この1枚をDL</span>
+                </button>
+
+                <canvas id="editorCanvas" width="1200" height="1200"></canvas>
+            </div>
+            
+            <div class="pending-bar" id="pendingBarArea">
+                <div class="pending-header">
+                    <span>⏳ 未完了写真: <span id="pendingCount">0</span>件</span>
+                    <div id="pendingBatchTools" style="display:none; gap:6px; align-items:center;">
+                        <span style="color:#ff9800;">範囲選択中: <strong id="pendingSelectedCount">0</strong>件</span>
+                        <button id="bulkConfirmPendingBtn" class="btn-confirm" style="font-size:10px; padding:2px 6px;">選択分を一括確定</button>
+                        <button id="bulkDeletePendingBtn" class="btn-danger" style="font-size:10px; padding:2px 6px;">選択分を消去</button>
+                        <button id="clearPendingSelectionBtn" class="btn-secondary" style="font-size:10px; padding:2px 6px;">解除</button>
+                    </div>
+                    <span id="pendingHelpText" style="color:var(--text-sub);">※Ctrl+ドラッグ または 左長押しドラッグで一括範囲選択</span>
+                </div>
+                <div class="pending-list" id="pendingList"></div>
+            </div>
+
+            <div id="status">ファイルをドロップするか、左上の選択ボタンから取り込んでください</div>
+        </div>
+
+        <div class="splitter" id="splitter" title="左右にドラッグで幅を調整／ダブルクリックで初期値に戻す"></div>
+
+        <div class="sidebar" id="sidebarDropArea">
+            <div class="sidebar-toolbar">
+                <span style="font-weight:bold; font-size:12px; color:#28a745;">✓ 完了済み</span>
+                <div style="display:flex; gap:4px;">
+                    <button id="downloadZipBtn" class="btn-zip" style="font-size:10px; padding:3px 6px;">📦 ZIP一括DL</button>
+                    <button id="exportDriveBtn" class="btn-drive" style="font-size:10px; padding:3px 6px; display:none;" title="接続中のフォルダへ直接書き出す">💾 フォルダへ書出</button>
+                    <button id="openVaultBtn" class="btn-secondary" style="font-size:10px; padding:3px 6px; background:#444;">保管庫</button>
+                    <button id="addFolderBtn" class="btn-secondary" style="font-size:10px; padding:3px 6px;">＋ フォルダ</button>
+                </div>
+            </div>
+
+            <div id="selectionBar" class="selection-bar">
+                <span>選択中: <strong id="selectedCount">0</strong>件</span>
+                <button id="deleteSelectedBtn" class="btn-secondary" style="font-size:10px; background:#fff; color:#dc3545; font-weight:bold; margin-left:auto;">選択分を消去</button>
+                <button id="cancelSelectionBtn" class="btn-secondary" style="font-size:10px;">解除</button>
+            </div>
+
+            <div class="completed-tree" id="completedTree"></div>
+        </div>
+    </div>
+
+    <!-- 写真保管庫 Modal -->
+    <div class="modal-overlay" id="vaultModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <h3 style="margin:0;">📦 写真保管庫 (全データ一覧)</h3>
+                    <button id="driveSyncBtn" class="btn-drive" style="font-size:11px; padding:4px 10px;">☁️ Drive一括同期</button>
+                </div>
+                <button id="closeVaultBtn" class="btn-danger" style="padding:4px 10px;">✕ 閉じる</button>
+            </div>
+            <div class="modal-body">
+                <table class="vault-table">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="selectAllVault"></th>
+                            <th>プレビュー</th>
+                            <th>所属フォルダ</th>
+                            <th>自動採番ファイル名</th>
+                            <th>状態</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vaultTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- システム設定 Modal -->
+    <div class="modal-overlay" id="configModal">
+        <div class="modal-content" style="max-width: 650px;">
+            <div class="modal-header">
+                <h3 style="margin:0;">⚙️ システム設定＆カスタマイズ</h3>
+                <button id="closeConfigBtn" class="btn-danger" style="padding:4px 10px;">✕ 閉じる</button>
+            </div>
+            <div class="modal-body">
+                <!-- 1. Gemini AI 連携設定 -->
+                <div class="config-card">
+                    <h4 style="margin:0 0 8px 0; color:#00bcd4;">🤖 1. Gemini AIマテハン自動判別設定</h4>
+                    <p style="font-size:11px; margin:0 0 8px 0; color:var(--text-sub);">
+                        1枚目の写真にある養生テープ（緑・白・ピンク等）の手書き文字や背景全体の形状から、AIが商品名（ネステナー、パレット、カゴ台車等）を一瞬で自動判別します。
+                    </p>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <div style="display:flex; gap:6px;">
+                            <input type="password" id="geminiApiKeyInput" placeholder="Gemini API Key を入力してください" style="flex:1; padding:6px; font-size:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-panel); color:var(--text-main);">
+                            <button id="saveApiKeyBtn" class="btn-confirm" style="font-size:11px;">APIキー保存</button>
+                        </div>
+                        <label class="config-item" style="font-weight:bold; color:#00e676;">
+                            <input type="checkbox" id="cfgAutoAiAnalyze" checked>
+                            <span>画像取り込み時に1枚目の写真から商品名を自動判別する</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 2. 背景色テーマ設定 -->
+                <div class="config-card">
+                    <h4 style="margin:0 0 8px 0; color:#28a745;">🎨 2. アプリ背景色（テーマ切り替え）</h4>
+                    <div style="display:flex; gap:12px;">
+                        <label class="config-item" style="background:#181818; color:#fff; padding:8px 16px; border-radius:6px; border:1px solid #555;">
+                            <input type="radio" name="themeSelect" value="dark" checked>
+                            <span>🖤 ダークブラック</span>
+                        </label>
+                        <label class="config-item" style="background:#f0f2f5; color:#111; padding:8px 16px; border-radius:6px; border:1px solid #ccc;">
+                            <input type="radio" name="themeSelect" value="white">
+                            <span>🤍 ライトホワイト</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 4. 保存先ドライブ連携 -->
+                <div class="config-card">
+                    <h4 style="margin:0 0 8px 0; color:#4285f4;">💾 4. 保存先フォルダ（パソコンのドライブ）連携</h4>
+                    <p style="font-size:11px; margin:0 0 8px 0; color:var(--text-sub);">
+                        パソコンのフォルダを1つ選んでおくと、確定した写真をZIPを介さずそのフォルダへ直接書き出せます。<br>
+                        フォルダ内の写真をまとめて読み込むこともできます。（OneDrive や Google ドライブの同期フォルダを選べば、そのままクラウドにも上がります）
+                    </p>
+                    <div id="driveUnsupported" style="display:none; font-size:11px; background:rgba(220,53,69,0.15); border:1px solid #dc3545; border-radius:4px; padding:8px; margin-bottom:8px; line-height:1.6;"></div>
+                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                        <button id="connectDriveBtn" class="btn-drive" style="font-size:11px;">📂 保存先フォルダを選ぶ</button>
+                        <button id="importDriveBtn" class="btn-secondary" style="font-size:11px;">⬇ このフォルダから写真を読み込む</button>
+                        <button id="disconnectDriveBtn" class="btn-secondary" style="font-size:11px; background:#666;">接続を解除</button>
+                    </div>
+                    <div id="driveStatus" style="font-size:11px; margin-top:8px; color:var(--text-sub);">未接続</div>
+                </div>
+
+                <!-- 3. 画面UI表示のカスタマイズ -->
+                <div class="config-card">
+                    <h4 style="margin:0 0 8px 0; color:#ff9800;">🚀 3. 画面表示モード・プリセット</h4>
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <button id="presetBeginnerBtn" class="btn-secondary" style="background:#007bff; color:#fff; flex:1;">🟢 初心者設定 (フル表示)</button>
+                        <button id="presetExpertBtn" class="btn-secondary" style="background:#28a745; color:#fff; flex:1;">⚡ 慣れた人用お勧め (スッキリ配置)</button>
+                    </div>
+                    <div class="config-group">
+                        <label class="config-item">
+                            <input type="checkbox" id="cfgShowUndoBtn" checked>
+                            <span>「戻す (Ctrl+Z)」ボタンを表示する</span>
+                        </label>
+                        <label class="config-item">
+                            <input type="checkbox" id="cfgShowCompareBtn" checked>
+                            <span>「Before比較 (長押し)」ボタンを表示する（※右クリック長押しでも比較可能）</span>
+                        </label>
+                        <label class="config-item">
+                            <input type="checkbox" id="cfgCompactDownloadBtn">
+                            <span>「この1枚をDL」のテキストを隠し、マーク（>>>）のみにスッキリ変更する</span>
+                        </label>
+                        <label class="config-item">
+                            <input type="checkbox" id="cfgShowGuideHints" checked>
+                            <span>操作ヒント・解説テキストを表示する</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        //  バージョン。中身を変更したら必ずここを上げる。
+        //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
+        //  実装漏れかを即座に切り分けられる。
+        // ============================================================
+        const APP_VERSION = '0.9.0-beta';
+        const APP_BUILD = '20260826-1142';
+
+        const upload = document.getElementById('upload');
+        const folderUpload = document.getElementById('folderUpload');
+        const dropArea = document.getElementById('dropArea');
+        const sidebarDropArea = document.getElementById('sidebarDropArea');
+        const dropOverlay = document.getElementById('dropOverlay');
+        const compareBadge = document.getElementById('compareBadge');
+        const canvas = document.getElementById('editorCanvas');
+        const ctx = canvas.getContext('2d');
+        const confirmBtn = document.getElementById('confirmBtn');
+        const undoBtn = document.getElementById('undoBtn');
+        const downloadSingleBtn = document.getElementById('downloadSingleBtn');
+        const dlBtnText = document.getElementById('dlBtnText');
+        const downloadZipBtn = document.getElementById('downloadZipBtn');
+        const compareBtn = document.getElementById('compareBtn');
+        const addFolderBtn = document.getElementById('addFolderBtn');
+        const openVaultBtn = document.getElementById('openVaultBtn');
+        const driveSyncBtn = document.getElementById('driveSyncBtn');
+        const vaultModal = document.getElementById('vaultModal');
+        const closeVaultBtn = document.getElementById('closeVaultBtn');
+        const vaultTableBody = document.getElementById('vaultTableBody');
+        const selectAllVault = document.getElementById('selectAllVault');
+        const selectionBar = document.getElementById('selectionBar');
+        const selectedCountEl = document.getElementById('selectedCount');
+        const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+        const cancelSelectionBtn = document.getElementById('cancelSelectionBtn');
+        const modeSelectBtn = document.getElementById('modeSelectBtn');
+        const modeVignetteBtn = document.getElementById('modeVignetteBtn');
+        const modeMaskBtn = document.getElementById('modeMaskBtn');
+        const modeArrowBtn = document.getElementById('modeArrowBtn');
+        const selectTools = document.getElementById('selectTools');
+        const vignetteTools = document.getElementById('vignetteTools');
+        const brushTools = document.getElementById('brushTools');
+        const arrowTools = document.getElementById('arrowTools');
+        const showGridCheck = document.getElementById('showGridCheck');
+        const enableSnapCheck = document.getElementById('enableSnapCheck');
+        const fitCoverBtn = document.getElementById('fitCoverBtn');
+        const darknessSlider = document.getElementById('darknessSlider');
+        const darknessValue = document.getElementById('darknessValue');
+        const eyedropperBtn = document.getElementById('eyedropperBtn');
+        const colorDisplay = document.getElementById('colorDisplay');
+        const brushSizeSelect = document.getElementById('brushSizeSelect');
+        const arrowTypeSelect = document.getElementById('arrowTypeSelect');
+        const arrowColorPicker = document.getElementById('arrowColorPicker');
+        const arrowEyedropperBtn = document.getElementById('arrowEyedropperBtn');
+        const autoWidthBtn = document.getElementById('autoWidthBtn');
+        const colorToleranceSlider = document.getElementById('colorToleranceSlider');
+        const colorToleranceValue = document.getElementById('colorToleranceValue');
+        const clearArrowsBtn = document.getElementById('clearArrowsBtn');
+        const pendingList = document.getElementById('pendingList');
+        const pendingCount = document.getElementById('pendingCount');
+        const completedTree = document.getElementById('completedTree');
+        const status = document.getElementById('status');
+        const pendingHelpText = document.getElementById('pendingHelpText');
+
+        const pendingSelectBox = document.getElementById('pendingSelectBox');
+        const pendingBatchTools = document.getElementById('pendingBatchTools');
+        const pendingSelectedCount = document.getElementById('pendingSelectedCount');
+        const bulkConfirmPendingBtn = document.getElementById('bulkConfirmPendingBtn');
+        const bulkDeletePendingBtn = document.getElementById('bulkDeletePendingBtn');
+        const clearPendingSelectionBtn = document.getElementById('clearPendingSelectionBtn');
+
+        const appVersionEl = document.getElementById('appVersion');
+        appVersionEl.innerText = `v${APP_VERSION}`;
+        appVersionEl.title = `バージョン ${APP_VERSION}（ビルド ${APP_BUILD}）\n`
+            + `修正が反映されない時は Ctrl+Shift+R で再読み込みしてください。\n`
+            + `クリックでバージョン情報をコピーします。`;
+        appVersionEl.addEventListener('click', () => {
+            const info = `写真保管庫 v${APP_VERSION} / build ${APP_BUILD} / ${location.href}`;
+            try { navigator.clipboard.writeText(info); } catch (e) {}
+            status.innerText = `バージョン情報をコピーしました: v${APP_VERSION} (${APP_BUILD})`;
+        });
+
+        const openConfigBtn = document.getElementById('openConfigBtn');
+        const configModal = document.getElementById('configModal');
+        const closeConfigBtn = document.getElementById('closeConfigBtn');
+        const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
+        const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
+        const cfgAutoAiAnalyze = document.getElementById('cfgAutoAiAnalyze');
+        const aiStatusBadge = document.getElementById('aiStatusBadge');
+        const presetBeginnerBtn = document.getElementById('presetBeginnerBtn');
+        const presetExpertBtn = document.getElementById('presetExpertBtn');
+        const cfgShowUndoBtn = document.getElementById('cfgShowUndoBtn');
+        const cfgShowCompareBtn = document.getElementById('cfgShowCompareBtn');
+        const cfgCompactDownloadBtn = document.getElementById('cfgCompactDownloadBtn');
+        const cfgShowGuideHints = document.getElementById('cfgShowGuideHints');
+
+        let uiConfig = {
+            showUndoBtn: true,
+            showCompareBtn: true,
+            compactDownloadBtn: false,
+            showGuideHints: true,
+            theme: 'dark',
+            geminiApiKey: '',
+            autoAiAnalyze: true,
+            selectedCenter: 'GU1',
+            sidebarWidth: 360
+        };
+
+        let selectedPendingKeys = new Set();
+
+        function loadConfig() {
+            const saved = localStorage.getItem('photoStudioUIConfig');
+            if (saved) {
+                try { uiConfig = { ...uiConfig, ...JSON.parse(saved) }; } catch(e){}
+            }
+            applyConfigToUI();
+        }
+
+        function saveConfig() {
+            localStorage.setItem('photoStudioUIConfig', JSON.stringify(uiConfig));
+            applyConfigToUI();
+        }
+
+        function applyConfigToUI() {
+            cfgShowUndoBtn.checked = uiConfig.showUndoBtn;
+            cfgShowCompareBtn.checked = uiConfig.showCompareBtn;
+            cfgCompactDownloadBtn.checked = uiConfig.compactDownloadBtn;
+            cfgShowGuideHints.checked = uiConfig.showGuideHints;
+            cfgAutoAiAnalyze.checked = uiConfig.autoAiAnalyze !== false;
+            geminiApiKeyInput.value = uiConfig.geminiApiKey || '';
+
+            undoBtn.style.display = uiConfig.showUndoBtn ? 'inline-block' : 'none';
+            compareBtn.style.display = uiConfig.showCompareBtn ? 'inline-block' : 'none';
+            
+            if (uiConfig.compactDownloadBtn) {
+                dlBtnText.style.display = 'none';
+                downloadSingleBtn.style.padding = '5px 8px';
+            } else {
+                dlBtnText.style.display = 'inline';
+                downloadSingleBtn.style.padding = '5px 9px';
+            }
+
+            pendingHelpText.style.display = uiConfig.showGuideHints ? 'inline' : 'none';
+            status.style.display = uiConfig.showGuideHints ? 'block' : 'none';
+
+            if (uiConfig.theme === 'white') {
+                document.body.classList.add('theme-white');
+                document.querySelector('input[name="themeSelect"][value="white"]').checked = true;
+            } else {
+                document.body.classList.remove('theme-white');
+                document.querySelector('input[name="themeSelect"][value="dark"]').checked = true;
+            }
+
+            if (uiConfig.geminiApiKey && uiConfig.autoAiAnalyze !== false) {
+                aiStatusBadge.style.display = 'inline-flex';
+            } else {
+                aiStatusBadge.style.display = 'none';
+            }
+
+            document.querySelectorAll('.large-center-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.getAttribute('data-center') === uiConfig.selectedCenter);
+            });
+
+            applySidebarWidth(uiConfig.sidebarWidth);
+        }
+
+        // ============================================================
+        //  作業スペース ⇔ 保管庫 の幅調整（仕切りを左右にドラッグ）
+        // ============================================================
+        const splitter = document.getElementById('splitter');
+        const appContainer = document.querySelector('.app-container');
+        const SIDEBAR_MIN = 200;
+        const DEFAULT_SIDEBAR_WIDTH = 360;
+
+        function clampSidebarWidth(px) {
+            const total = appContainer.clientWidth || window.innerWidth;
+            const max = Math.max(SIDEBAR_MIN, Math.round(total * 0.6));  // 作業スペースを最低40%残す
+            return Math.round(Math.min(Math.max(px, SIDEBAR_MIN), max));
+        }
+
+        function applySidebarWidth(px) {
+            const w = clampSidebarWidth(px || DEFAULT_SIDEBAR_WIDTH);
+            sidebarDropArea.style.width = w + 'px';
+            return w;
+        }
+
+        let splitterDragging = false;
+        splitter.addEventListener('pointerdown', (e) => {
+            splitterDragging = true;
+            splitter.classList.add('dragging');
+            document.body.classList.add('splitter-active');
+            splitter.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        });
+
+        splitter.addEventListener('pointermove', (e) => {
+            if (!splitterDragging) return;
+            // 仕切りより右側の残り幅 ＝ サイドバー幅
+            const rect = appContainer.getBoundingClientRect();
+            applySidebarWidth(rect.right - e.clientX - 6);
+        });
+
+        function endSplitterDrag(e) {
+            if (!splitterDragging) return;
+            splitterDragging = false;
+            splitter.classList.remove('dragging');
+            document.body.classList.remove('splitter-active');
+            try { splitter.releasePointerCapture(e.pointerId); } catch (err) {}
+            uiConfig.sidebarWidth = parseInt(sidebarDropArea.style.width, 10) || DEFAULT_SIDEBAR_WIDTH;
+            localStorage.setItem('photoStudioUIConfig', JSON.stringify(uiConfig));
+            status.innerText = `パネル幅を ${uiConfig.sidebarWidth}px に変更しました。`;
+        }
+        splitter.addEventListener('pointerup', endSplitterDrag);
+        splitter.addEventListener('pointercancel', endSplitterDrag);
+
+        splitter.addEventListener('dblclick', () => {
+            uiConfig.sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
+            applySidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+            localStorage.setItem('photoStudioUIConfig', JSON.stringify(uiConfig));
+            status.innerText = "パネル幅を初期値に戻しました。";
+        });
+
+        window.addEventListener('resize', () => applySidebarWidth(uiConfig.sidebarWidth));
+
+        openConfigBtn.addEventListener('click', () => configModal.style.display = 'flex');
+        closeConfigBtn.addEventListener('click', () => configModal.style.display = 'none');
+
+        saveApiKeyBtn.addEventListener('click', () => {
+            uiConfig.geminiApiKey = geminiApiKeyInput.value.trim();
+            saveConfig();
+            alert("Gemini APIキーを保存しました！");
+        });
+
+        cfgAutoAiAnalyze.addEventListener('change', () => {
+            uiConfig.autoAiAnalyze = cfgAutoAiAnalyze.checked;
+            saveConfig();
+        });
+
+        document.querySelectorAll('input[name="themeSelect"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                uiConfig.theme = e.target.value;
+                saveConfig();
+            });
+        });
+
+        document.querySelectorAll('.large-center-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const centerVal = e.target.getAttribute('data-center');
+                uiConfig.selectedCenter = centerVal;
+                saveConfig();
+                status.innerText = `対応センターを「${centerVal}」に切り替えました。`;
+            });
+        });
+
+        presetBeginnerBtn.addEventListener('click', () => {
+            uiConfig = { ...uiConfig, showUndoBtn: true, showCompareBtn: true, compactDownloadBtn: false, showGuideHints: true };
+            saveConfig();
+        });
+
+        presetExpertBtn.addEventListener('click', () => {
+            uiConfig = { ...uiConfig, showUndoBtn: false, showCompareBtn: false, compactDownloadBtn: true, showGuideHints: false };
+            saveConfig();
+        });
+
+        [cfgShowUndoBtn, cfgShowCompareBtn, cfgCompactDownloadBtn, cfgShowGuideHints].forEach(input => {
+            input.addEventListener('change', () => {
+                uiConfig.showUndoBtn = cfgShowUndoBtn.checked;
+                uiConfig.showCompareBtn = cfgShowCompareBtn.checked;
+                uiConfig.compactDownloadBtn = cfgCompactDownloadBtn.checked;
+                uiConfig.showGuideHints = cfgShowGuideHints.checked;
+                saveConfig();
+            });
+        });
+
+        loadConfig();
+
+        // --- Gemini AI自動判別 ---
+        async function autoAnalyzeFirstImage(folderObj, firstImg) {
+            if (!uiConfig.autoAiAnalyze || !uiConfig.geminiApiKey) return;
+
+            status.innerText = `🤖 [${uiConfig.selectedCenter}] Gemini AIが1枚目の写真から商品名を自動解析中...`;
+
+            try {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 1200; tempCanvas.height = 1200;
+                const tCtx = tempCanvas.getContext('2d');
+                renderTransformImageToCanvas(tCtx, firstImg, 0, 1.0, 0, 0);
+
+                const base64Image = tempCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${uiConfig.geminiApiKey}`;
+
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: "この画像は中古マテハン（物流資材・物流機器）の写真です。写真に貼られている養生テープ（緑色・白色・ピンク色等）の手書き文字やメモ、シール、および全体の商品形状から、このマテハンの商品名・種別（例：ネステナー、メッシュパレット、カゴ台車、プラスチックパレット、ハンドリフト、スチールラック等）を特定してください。返答は余計な解説を含めず、特定された日本語の商品名単語（15文字以内）のみを返してください。" },
+                            { inlineData: { mimeType: "image/jpeg", data: base64Image } }
+                        ]
+                    }]
+                };
+
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                if (data.candidates && data.candidates[0].content.parts[0].text) {
+                    const detectedName = data.candidates[0].content.parts[0].text.trim().replace(/[「」\n]/g, '');
+                    folderObj.name = `📁 ${detectedName}`;
+                    updateItemNames();
+                    renderUI();
+                    saveToDB();
+                    status.innerText = `🤖 AI自動判定成功: フォルダ名を「📁 ${detectedName}」に自動更新しました！`;
+                }
+            } catch (err) {
+                console.error(err);
+                status.innerText = "AI自動判定をスキップしました";
+            }
+        }
+
+        let folders = [{ id: 'folder_1', name: '📁 分類グループ1', isOpen: true, items: [] }];
+        let activeFolderId = 'folder_1';
+        let activeItemIndex = -1;
+        let selectedItemKeys = new Set();
+        let draggedItemInfo = null;
+
+        let rawCanvas = document.createElement('canvas');
+        rawCanvas.width = 1200; rawCanvas.height = 1200;
+        let rawCtx = rawCanvas.getContext('2d');
+
+        let baseCanvas = document.createElement('canvas');
+        baseCanvas.width = 1200; baseCanvas.height = 1200;
+        let baseCtx = baseCanvas.getContext('2d');
+
+        let isDrawing = false;
+        let isEditing = false;
+        let isEyedropperActive = false;
+        let isArrowEyedropperActive = false;
+        let activeHandle = null;
+
+        let selectedObjectType = null; 
+        let selectedArrowIndex = -1;
+
+        let activeSelectTarget = null; 
+        let activeArrowHandle = null; 
+        let dragStartPos = { x: 0, y: 0 };
+        let currentMode = 'select';
+        let activeTempArrow = null;
+        let isSnappedToParallel = false;
+
+        const SENSITIVITY_SCALE = 2.5;
+        let currentColor = "#E0E0E0";
+        let arrowColor = "#ff0000";
+        let arrowType = "single";
+        let brushSize = 30;
+        let bgDarkness = 0.70;
+        let currentImageAngle = 0;
+        let currentImageScale = 1.0;
+        let currentOffsetX = 0;
+        let currentOffsetY = 0;
+
+        let touchStartDist = 0;
+        let touchStartAngle = 0;
+        let initialScaleOnTouch = 1.0;
+        let initialAngleOnTouch = 0;
+
+        let shape = { cx: 600, cy: 600, rx: 250, ry: 180, rotation: 0 };
+        
+        let historyStack = [];
+        let deletedHistory = [];
+
+        const DB_NAME = "PhotoVaultDB";
+        const DB_STORE = "vaultStore";
+        let db = null;
+
+        function updateItemNames() {
+            folders.forEach(folder => {
+                let cleanName = folder.name.replace(/^[^\w\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+/u, '').trim();
+                if (!cleanName) cleanName = folder.name;
+                
+                folder.items.forEach((item, index) => {
+                    // 自動採番名は常に持っておき、個別名が付いていればそちらを優先する
+                    item.autoName = `${cleanName}${index + 1}`;
+                    const own = (item.userName || '').trim();
+                    item.customName = own ? own : item.autoName;
+                });
+            });
+        }
+
+        // --- 写真1枚ごとの名前付け（空欄にすると自動採番に戻る） ---
+        function renamePhoto(folderId, index) {
+            const folder = folders.find(f => f.id === folderId);
+            if (!folder || !folder.items[index]) return;
+            const item = folder.items[index];
+
+            const input = prompt(
+                `この写真の名前を入力してください。\n（空欄にすると自動採番「${item.autoName || ''}」に戻ります）`,
+                item.userName || item.autoName || ''
+            );
+            if (input === null) return;
+
+            item.userName = input.trim();
+            updateItemNames();
+            renderUI();
+            saveToDB();
+            status.innerText = item.userName
+                ? `写真名を「${item.customName}」に変更しました。`
+                : `写真名を自動採番「${item.customName}」に戻しました。`;
+        }
+
+        function initDB() {
+            const req = indexedDB.open(DB_NAME, 1);
+            req.onupgradeneeded = (e) => {
+                db = e.target.result;
+                if (!db.objectStoreNames.contains(DB_STORE)) {
+                    db.createObjectStore(DB_STORE, { keyPath: "id" });
+                }
+            };
+            req.onsuccess = (e) => {
+                db = e.target.result;
+                loadFromDB();
+                restoreDriveHandle();   // 前回選んだ保存先フォルダを復元
+            };
+        }
+
+        function saveToDB() {
+            if (!db) return;
+            updateItemNames();
+            const tx = db.transaction(DB_STORE, "readwrite");
+            const store = tx.objectStore(DB_STORE);
+            const serializableFolders = folders.map(f => ({
+                id: f.id,
+                name: f.name,
+                isOpen: f.isOpen,
+                items: f.items.map(i => ({
+                    customName: i.customName,
+                    userName: i.userName || '',
+                    fileName: i.file ? i.file.name : i.customName,
+                    imgSrc: i.img.src,
+                    cleanCanvasData: i.cleanCanvas ? i.cleanCanvas.toDataURL() : null,
+                    vignetteShape: i.vignetteShape || null,
+                    arrows: i.arrows || [],
+                    imageAngle: i.imageAngle || 0,
+                    imageScale: i.imageScale || 1.0,
+                    offsetX: i.offsetX || 0,
+                    offsetY: i.offsetY || 0,
+                    isDone: i.isDone
+                }))
+            }));
+            const putReq = store.put({ id: "main_data", folders: serializableFolders, activeFolderId, activeItemIndex });
+
+            // 保存失敗を握りつぶすと「次に開いたら写真が消えている」になるので必ず表に出す
+            putReq.onerror = (e) => {
+                e.preventDefault();
+                const err = putReq.error;
+                console.error("saveToDB 失敗:", err);
+                if (err && err.name === 'QuotaExceededError') {
+                    status.innerText = "⚠ 保存容量オーバー: 保管庫への自動保存に失敗しました（画面上のデータは有効です）";
+                } else {
+                    status.innerText = `⚠ 保管庫への自動保存に失敗しました (${err ? err.name : '不明なエラー'})`;
+                }
+            };
+            tx.onabort = () => {
+                console.error("saveToDB トランザクション中断:", tx.error);
+                status.innerText = "⚠ 保管庫への自動保存が中断されました（容量不足の可能性があります）";
+            };
+        }
+
+        function loadFromDB() {
+            if (!db) return;
+            const tx = db.transaction(DB_STORE, "readonly");
+            const store = tx.objectStore(DB_STORE);
+            const req = store.get("main_data");
+            req.onsuccess = (e) => {
+                const data = e.target.result;
+                if (data && data.folders && data.folders.length > 0) {
+                    let loadedFolders = [];
+                    let pendingCountNum = 0;
+                    data.folders.forEach(f => {
+                        let folderObj = { id: f.id, name: f.name, isOpen: f.isOpen, items: [] };
+                        f.items.forEach(i => {
+                            pendingCountNum++;
+                            const img = new Image();
+                            img.onload = () => {
+                                const cleanC = document.createElement('canvas');
+                                cleanC.width = 1200; cleanC.height = 1200;
+                                const cCtx = cleanC.getContext('2d');
+                                if (i.cleanCanvasData) {
+                                    const cleanImg = new Image();
+                                    cleanImg.onload = () => {
+                                        cCtx.drawImage(cleanImg, 0, 0);
+                                        pendingCountNum--;
+                                        if (pendingCountNum === 0) finishDBLoad(data);
+                                    };
+                                    cleanImg.src = i.cleanCanvasData;
+                                } else {
+                                    renderTransformImageToCanvas(cCtx, img, i.imageAngle || 0, i.imageScale || 1.0, i.offsetX || 0, i.offsetY || 0);
+                                    pendingCountNum--;
+                                    if (pendingCountNum === 0) finishDBLoad(data);
+                                }
+                                folderObj.items.push({
+                                    file: { name: i.fileName },
+                                    customName: i.customName,
+                                    userName: i.userName || '',
+                                    img: img,
+                                    cleanCanvas: cleanC,
+                                    vignetteShape: i.vignetteShape || null,
+                                    arrows: i.arrows || [],
+                                    imageAngle: i.imageAngle || 0,
+                                    imageScale: i.imageScale || 1.0,
+                                    offsetX: i.offsetX || 0,
+                                    offsetY: i.offsetY || 0,
+                                    processedBlob: null,
+                                    isDone: i.isDone
+                                });
+                            };
+                            img.src = i.imgSrc;
+                        });
+                        loadedFolders.push(folderObj);
+                    });
+                    folders = loadedFolders;
+                    if (pendingCountNum === 0) finishDBLoad(data);
+                } else {
+                    renderUI();
+                }
+            };
+        }
+
+        function finishDBLoad(data) {
+            activeFolderId = data.activeFolderId || folders[0].id;
+            activeItemIndex = data.activeItemIndex !== undefined ? data.activeItemIndex : -1;
+            updateItemNames();
+            renderUI();
+            if (activeItemIndex !== -1) loadQueueItem(activeFolderId, activeItemIndex);
+            status.innerText = "写真保管庫からデータを読み込みました。";
+        }
+
+        initDB();
+
+        function getActiveFolder() {
+            return folders.find(f => f.id === activeFolderId) || folders[0];
+        }
+
+        function getActiveItem() {
+            const folder = getActiveFolder();
+            return (folder && activeItemIndex !== -1) ? folder.items[activeItemIndex] : null;
+        }
+
+        function renderTransformImageToCanvas(targetCtx, img, angle = 0, scaleFactor = 1.0, offX = 0, offY = 0) {
+            targetCtx.save();
+            targetCtx.fillStyle = "#FFFFFF";
+            targetCtx.fillRect(0, 0, 1200, 1200);
+            targetCtx.translate(600 + (offX || 0), 600 + (offY || 0));
+            targetCtx.rotate((angle || 0) * Math.PI / 180);
+            const baseScale = (1200 / Math.max(img.width, img.height)) * (scaleFactor || 1.0);
+            const w = img.width * baseScale;
+            const h = img.height * baseScale;
+            targetCtx.drawImage(img, -w / 2, -h / 2, w, h);
+            targetCtx.restore();
+        }
+
+        function createCleanCanvas(img, angle = 0, zoom = 1.0, offX = 0, offY = 0) {
+            const c = document.createElement('canvas');
+            c.width = 1200; c.height = 1200;
+            const cCtx = c.getContext('2d');
+            renderTransformImageToCanvas(cCtx, img, angle, zoom, offX, offY);
+            return c;
+        }
+
+        // --- 画像ファイル判定関数 (完全拡張子・タイプ判定) ---
+        function isImageFile(file) {
+            if (!file) return false;
+            if (file.size === 0 && !file.type) return false;
+            if (file.type && file.type.startsWith('image/')) return true;
+            const name = file.name ? file.name.toLowerCase() : '';
+            return /\.(jpg|jpeg|png|webp|gif|bmp|jfif|pjpeg|pjp|heic|heif|tiff|tif|svg)$/i.test(name);
+        }
+
+        // --- フォルダ階層の全自動再帰スキャン機能 ---
+        // 重要: DataTransfer は drop ハンドラが最初の await に入った時点で無効化される。
+        //       そのため entry / File の取得は「await をまたぐ前に同期で」全部やり切る。
+        // ブラウザから実際に何が渡ってきたかを記録する（原因究明用）
+        function describeDataTransfer(dataTransfer) {
+            const info = { types: [], items: [], filesCount: 0, fileNames: [] };
+            if (!dataTransfer) { info.types = ['(dataTransfer が null)']; return info; }
+            try { info.types = Array.prototype.slice.call(dataTransfer.types || []); } catch (e) { info.types = ['(types 取得不可)']; }
+            try {
+                if (dataTransfer.items) {
+                    for (let i = 0; i < dataTransfer.items.length; i++) {
+                        const it = dataTransfer.items[i];
+                        info.items.push(`kind=${it.kind} / type=${it.type || '(空)'}`);
+                    }
+                }
+            } catch (e) { info.items.push('(items 取得不可: ' + e.message + ')'); }
+            try {
+                if (dataTransfer.files) {
+                    info.filesCount = dataTransfer.files.length;
+                    for (let i = 0; i < Math.min(dataTransfer.files.length, 5); i++) {
+                        const f = dataTransfer.files[i];
+                        info.fileNames.push(`${f.name} (${f.size}B / ${f.type || 'type空'})`);
+                    }
+                }
+            } catch (e) { info.fileNames.push('(files 取得不可: ' + e.message + ')'); }
+            return info;
+        }
+
+        function collectDropSources(dataTransfer) {
+            const entries = [];      // フォルダ再帰スキャン用
+            const itemFiles = [];    // items から直接取れた File（フォルダは null になる）
+            let dirName = "";
+            const transferInfo = describeDataTransfer(dataTransfer);
+
+            if (dataTransfer.items && dataTransfer.items.length > 0) {
+                for (let i = 0; i < dataTransfer.items.length; i++) {
+                    const item = dataTransfer.items[i];
+                    if (item.kind !== 'file') continue;
+
+                    let entry = null;
+                    try { entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null; } catch (e) { entry = null; }
+                    if (entry) {
+                        if (entry.isDirectory && !dirName) dirName = entry.name;
+                        entries.push(entry);
+                    }
+
+                    let f = null;
+                    try { f = item.getAsFile ? item.getAsFile() : null; } catch (e) { f = null; }
+                    if (f) itemFiles.push(f);
+                }
+            }
+
+            // dataTransfer.files も今のうちに実体化しておく（後で読むと必ず空になる）
+            let plainFiles = [];
+            try {
+                if (dataTransfer.files && dataTransfer.files.length > 0) plainFiles = Array.from(dataTransfer.files);
+            } catch (e) { plainFiles = []; }
+
+            return { entries, itemFiles, plainFiles, dirName, transferInfo };
+        }
+
+        async function getAllFilesFromDataTransfer(dataTransfer) {
+            const diag = [];
+            const { entries, itemFiles, plainFiles, dirName, transferInfo } = collectDropSources(dataTransfer);
+
+            let files = [];
+            if (entries.length > 0) {
+                files = await scanEntries(entries, diag);
+            }
+            // 再帰スキャンが空振りした場合のフォールバック（同期で確保済みなので有効）
+            if (files.length === 0 && itemFiles.length > 0) files = itemFiles;
+            if (files.length === 0 && plainFiles.length > 0) files = plainFiles;
+
+            if (files.length === 0 && entries.length === 0 && itemFiles.length === 0 && plainFiles.length === 0) {
+                diag.push("ブラウザからファイル情報を1件も受け取れませんでした");
+            }
+
+            return { files, dirName, diag, transferInfo };
+        }
+
+        async function scanEntries(entries, diag = [], depth = 0) {
+            let fileList = [];
+            if (depth > 12) {
+                diag.push("フォルダの階層が深すぎるため、途中で打ち切りました（12階層まで）");
+                return fileList;
+            }
+
+            for (const entry of entries) {
+                const label = entry.fullPath || entry.name;
+
+                if (entry.isFile) {
+                    const f = await new Promise(resolve => {
+                        entry.file(resolve, (err) => {
+                            diag.push(`${label} : ${(err && (err.name || err.message)) || '読み取り不可'}`);
+                            resolve(null);
+                        });
+                    });
+                    if (f) fileList.push(f);
+                } else if (entry.isDirectory) {
+                    const dirReader = entry.createReader();
+                    const subEntries = await new Promise(resolve => {
+                        let result = [];
+                        const read = () => {
+                            dirReader.readEntries(batch => {
+                                if (!batch || batch.length === 0) {
+                                    resolve(result);
+                                } else {
+                                    result = result.concat(batch);
+                                    read();
+                                }
+                            }, (err) => {
+                                diag.push(`${label}（フォルダ） : ${(err && (err.name || err.message)) || '読み取り不可'}`);
+                                resolve(result);
+                            });
+                        };
+                        read();
+                    });
+                    const subFiles = await scanEntries(subEntries, diag, depth + 1);
+                    fileList = fileList.concat(subFiles);
+                }
+            }
+            return fileList;
+        }
+
+        // ============================================================
+        //  ドラッグ＆ドロップ受け入れ
+        //  ページのどこに落としても拾えるように window の capture 段階で受ける。
+        //  （枠外に落とすとブラウザが画像を直接開いてしまい、アプリが消えるため）
+        // ============================================================
+
+        // サムネイル並び替え（アプリ内ドラッグ）と、外部ファイルのドロップを区別する
+        let internalDragActive = false;
+
+        function dragCarriesFiles(dt) {
+            if (!dt) return false;
+            try {
+                if (dt.types) {
+                    for (let i = 0; i < dt.types.length; i++) if (dt.types[i] === 'Files') return true;
+                }
+            } catch (e) {}
+            try {
+                if (dt.items) {
+                    for (let i = 0; i < dt.items.length; i++) if (dt.items[i].kind === 'file') return true;
+                }
+            } catch (e) {}
+            return false;
+        }
+
+        function setDropHighlight(on) {
+            dropArea.classList.toggle('dragover', on);
+            sidebarDropArea.classList.toggle('dragover', on);
+        }
+
+        window.addEventListener('dragover', (e) => {
+            if (internalDragActive || !dragCarriesFiles(e.dataTransfer)) return;
+            e.preventDefault();
+            try { e.dataTransfer.dropEffect = 'copy'; } catch (err) {}
+            setDropHighlight(true);
+        }, true);
+
+        // 子要素をまたぐたびに dragleave が飛ぶので、ページ外に出た時だけ解除する
+        window.addEventListener('dragleave', (e) => {
+            if (e.relatedTarget) return;
+            setDropHighlight(false);
+        }, true);
+
+        window.addEventListener('dragend', () => { internalDragActive = false; setDropHighlight(false); }, true);
+
+        window.addEventListener('drop', async (e) => {
+            if (internalDragActive || !dragCarriesFiles(e.dataTransfer)) return;  // 並び替えドロップは従来通り
+            e.preventDefault();
+            e.stopPropagation();   // サムネイル側の並び替えハンドラに横取りさせない
+            setDropHighlight(false);
+            await intakeFromDataTransfer(e.dataTransfer);
+        }, true);
+
+        // dragCarriesFiles が false と誤判定した場合の最後の受け皿
+        [dropArea, sidebarDropArea].forEach(area => {
+            ['dragenter', 'dragover', 'drop'].forEach(eventName => {
+                area.addEventListener(eventName, (e) => { e.preventDefault(); }, false);
+            });
+            area.addEventListener('drop', async (e) => {
+                if (internalDragActive) return;
+                setDropHighlight(false);
+                await intakeFromDataTransfer(e.dataTransfer);
+            });
+        });
+
+        async function intakeFromDataTransfer(dataTransfer) {
+            status.innerText = "ファイルを読み込み・スキャン中...";
+
+            let files = [], dirName = "", diag = [], transferInfo = null;
+            try {
+                ({ files, dirName, diag, transferInfo } = await getAllFilesFromDataTransfer(dataTransfer));
+            } catch (err) {
+                console.error(err);
+                diag = [`スキャン中に例外が発生: ${err && err.message ? err.message : err}`];
+            }
+
+            if (files && files.length > 0) {
+                handleFiles(files, dirName);
+                return;
+            }
+
+            showDropDiagnostics(diag, transferInfo);
+        }
+
+        // --- 失敗時：ブラウザから何が渡ってきたのかを画面に出す ---
+        function showDropDiagnostics(diag, info) {
+            console.warn("[drop diag]", { diag, info });
+
+            const types = (info && info.types) || [];
+            const hasFilesType = types.indexOf('Files') !== -1;
+            const looksLikeWebDrag = !hasFilesType && (types.indexOf('text/uri-list') !== -1 || types.indexOf('text/html') !== -1);
+
+            let cause;
+            if (looksLikeWebDrag) {
+                cause = "ブラウザやアプリの画面に表示されている画像を、そのままドラッグした可能性が高いです。\n"
+                      + "この場合ブラウザはファイルの実体を渡してくれません。\n"
+                      + "→ 一度その画像を「名前を付けて保存」でフォルダに保存し、エクスプローラーからドラッグしてください。";
+            } else if (!hasFilesType && types.length === 0) {
+                cause = "ブラウザからファイル情報が一切渡されませんでした。\n"
+                      + "→ エクスプローラー（フォルダ画面）から直接ドラッグしているかご確認ください。\n"
+                      + "→ うまくいかない場合は上の「ファイル選択 / 📁 フォルダ選択」ボタンをお使いください（確実に読み込めます）。";
+            } else {
+                cause = "ファイルは渡されましたが、中身を読み取れませんでした。\n"
+                      + "→ OneDrive / SharePoint の「オンラインのみ」ファイルの場合、エクスプローラーで右クリック →\n"
+                      + "　「このデバイス上で常に保持する」を実行してから、再度ドロップしてください。\n"
+                      + "→ ネットワークドライブや ZIP の中身を直接ドラッグした場合も読み取れません。";
+            }
+
+            let report = "【ブラウザから渡されたデータ】\n";
+            report += "types: " + (types.length ? types.join(', ') : '(なし)') + "\n";
+            report += "items: " + ((info && info.items && info.items.length) ? info.items.join(' / ') : '(なし)') + "\n";
+            report += "files: " + ((info && info.filesCount) || 0) + " 件";
+            if (info && info.fileNames && info.fileNames.length) report += "\n  " + info.fileNames.join("\n  ");
+            if (diag && diag.length) report += "\n\n【スキャン中のエラー】\n・" + diag.join("\n・");
+
+            const old = document.getElementById('dropDiagPanel');
+            if (old) old.remove();
+
+            const panel = document.createElement('div');
+            panel.id = 'dropDiagPanel';
+            panel.className = 'modal-overlay';
+            panel.style.display = 'flex';
+            panel.innerHTML = `
+                <div class="modal-content" style="max-width:640px;">
+                    <div class="modal-header">
+                        <h3 style="margin:0; color:#ff9800;">⚠ 写真ファイルを読み込めませんでした</h3>
+                        <button class="btn-danger" style="padding:4px 10px;" data-diag-close>✕ 閉じる</button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="font-size:13px; line-height:1.7; white-space:pre-wrap; margin:0 0 12px 0;"></p>
+                        <div style="font-size:11px; font-weight:bold; color:var(--text-sub); margin-bottom:4px;">技術情報（開発者に伝えるとそのまま原因特定できます）</div>
+                        <textarea readonly style="width:100%; height:150px; font-family:monospace; font-size:11px; background:var(--bg-subpanel); color:var(--text-main); border:1px solid var(--border-color); border-radius:4px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
+                        <div style="display:flex; gap:8px; margin-top:10px;">
+                            <button class="btn-secondary" data-diag-copy>📋 技術情報をコピー</button>
+                            <button class="btn-confirm" data-diag-picker>📁 フォルダ選択で取り込む</button>
+                        </div>
+                    </div>
+                </div>`;
+            panel.querySelector('p').textContent = cause;
+            panel.querySelector('textarea').value = report;
+            panel.querySelector('[data-diag-close]').onclick = () => panel.remove();
+            panel.querySelector('[data-diag-copy]').onclick = (ev) => {
+                const ta = panel.querySelector('textarea');
+                ta.select();
+                try { navigator.clipboard.writeText(ta.value); } catch (err) { document.execCommand('copy'); }
+                ev.target.innerText = '✓ コピーしました';
+            };
+            panel.querySelector('[data-diag-picker]').onclick = () => { panel.remove(); folderUpload.click(); };
+            document.body.appendChild(panel);
+
+            status.innerText = "⚠ 読み込めませんでした（詳細ウィンドウをご確認ください）";
+        }
+
+        upload.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        folderUpload.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                let dirName = "";
+                if (e.target.files[0].webkitRelativePath) {
+                    dirName = e.target.files[0].webkitRelativePath.split('/')[0];
+                }
+                handleFiles(e.target.files, dirName);
+            }
+        });
+
+        async function handleFiles(files, dirNameHint = '') {
+            const validFiles = Array.from(files).filter(f => isImageFile(f));
+            const invalidFiles = Array.from(files).filter(f => !isImageFile(f));
+            const invalidCount = invalidFiles.length;
+
+            if (validFiles.length === 0) {
+                // 何を掴んだのかを拡張子ごとに出して、原因を目で確認できるようにする
+                let detail = '';
+                const all = Array.from(files);
+                if (all.length > 0) {
+                    const extCount = {};
+                    all.forEach(f => {
+                        const m = (f.name || '').toLowerCase().match(/\.[a-z0-9]+$/);
+                        const key = m ? m[0] : '(拡張子なし)';
+                        extCount[key] = (extCount[key] || 0) + 1;
+                    });
+                    const zeroByte = all.filter(f => f.size === 0).length;
+                    detail = `\n\n【読み取れたファイル ${all.length} 件の内訳】\n`
+                           + Object.keys(extCount).map(k => `・${k} : ${extCount[k]} 件`).join('\n');
+                    if (zeroByte > 0) {
+                        detail += `\n\n※うち ${zeroByte} 件が 0 バイトです。OneDrive の「オンラインのみ」ファイルの可能性があります。`
+                                + `\n　エクスプローラーで右クリック →「このデバイス上で常に保持する」を実行してから再度ドロップしてください。`;
+                    }
+                }
+                alert("画像ファイル（JPG / PNG / WebP 等）が検出されませんでした。" + detail + "\n\n【確認事項】\n・ドロップしたフォルダ内に画像（.jpg / .png等）が含まれているかご確認ください。\n・「ファイル選択」ボタンまたは「フォルダ選択」ボタンからも取り込みをお試しいただけます。");
+                status.innerText = "画像の取り込みに失敗しました。";
+                return;
+            }
+
+            const groupName = dirNameHint || `分類グループ${folders.length + 1}`;
+            let skipMsg = invalidCount > 0 ? `\n(※写真以外のファイル ${invalidCount} 件は自動スキップされます)` : '';
+            const message = `画像ファイルが ${validFiles.length} 件検出されました。${skipMsg}\n\n「${groupName}」として新規フォルダに同封・作成しますか？`;
+
+            if (!confirm(message)) {
+                status.innerText = "ファイルの取り込みをキャンセルしました。";
+                return;
+            }
+
+            const newFolderId = `folder_${Date.now()}`;
+            const newFolderName = `📁 ${groupName}`;
+            const newFolderObj = { id: newFolderId, name: newFolderName, isOpen: true, items: [] };
+            folders.push(newFolderObj);
+            activeFolderId = newFolderId;
+            activeItemIndex = -1;
+
+            const folder = getActiveFolder();
+            status.innerText = `${validFiles.length} 件の画像を読み込み中...`;
+
+            let loadedCount = 0;
+            let firstLoadedImg = null;
+            const failedFiles = [];
+
+            for (let fileIdx = 0; fileIdx < validFiles.length; fileIdx++) {
+                const file = validFiles[fileIdx];
+                try {
+                    const dataUrl = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+
+                    const img = await new Promise((resolve, reject) => {
+                        const image = new Image();
+                        image.onload = () => resolve(image);
+                        image.onerror = reject;
+                        image.src = dataUrl;
+                    });
+
+                    const cleanC = createCleanCanvas(img, 0, 1.0, 0, 0);
+                    folder.items.push({ 
+                        file: file, 
+                        customName: '', 
+                        img: img, 
+                        cleanCanvas: cleanC,
+                        vignetteShape: null,
+                        arrows: [],
+                        imageAngle: 0,
+                        imageScale: 1.0,
+                        offsetX: 0,
+                        offsetY: 0,
+                        processedBlob: null, 
+                        isDone: false
+                    });
+
+                    if (!firstLoadedImg) firstLoadedImg = img;
+                    loadedCount++;
+                } catch (err) {
+                    console.warn("画像読み込み失敗スキップ:", file.name, err);
+                    failedFiles.push(file.name);
+                }
+            }
+
+            if (loadedCount > 0) {
+                updateItemNames();
+                renderUI();
+                saveToDB();
+                if (activeItemIndex === -1) loadQueueItem(folder.id, 0);
+
+                status.innerText = `画像 ${loadedCount} 件を取り込みました。`
+                    + (invalidCount > 0 ? `（非画像 ${invalidCount} 件スキップ）` : '')
+                    + (failedFiles.length > 0 ? `（読み込み失敗 ${failedFiles.length} 件）` : '');
+
+                if (failedFiles.length > 0) console.warn("読み込みに失敗したファイル:", failedFiles);
+
+                if (firstLoadedImg && uiConfig.autoAiAnalyze) {
+                    autoAnalyzeFirstImage(newFolderObj, firstLoadedImg);
+                }
+            } else {
+                const heicCount = failedFiles.filter(n => /\.(heic|heif)$/i.test(n)).length;
+                let msg;
+                if (heicCount > 0 && heicCount === failedFiles.length) {
+                    msg = `iPhone の HEIC / HEIF 形式（${heicCount} 件）は、ブラウザが画像として開けません。\n\n`
+                        + `【対処】\n`
+                        + `・iPhone: [設定] → [カメラ] → [フォーマット] を「互換性優先」にすると JPEG で撮影されます。\n`
+                        + `・既存の写真: Windows の「フォト」等で JPEG に変換してから取り込んでください。`;
+                } else {
+                    msg = "画像の読み込みに失敗しました。ファイルフォーマットをご確認ください。";
+                    if (heicCount > 0) msg += `\n\n※うち ${heicCount} 件は HEIC/HEIF 形式で、ブラウザでは開けません。`;
+                }
+                if (failedFiles.length > 0) {
+                    msg += `\n\n【失敗したファイル】\n・` + failedFiles.slice(0, 5).join("\n・");
+                    if (failedFiles.length > 5) msg += `\n…ほか ${failedFiles.length - 5} 件`;
+                }
+                alert(msg);
+                status.innerText = "読み込みエラー";
+            }
+        }
+
+        function renderUI() {
+            updateItemNames();
+            renderPendingList();
+            renderCompletedTree();
+        }
+
+        function renderPendingList() {
+            pendingList.innerHTML = '';
+            let pCount = 0;
+
+            folders.forEach(folder => {
+                folder.items.forEach((item, index) => {
+                    if (!item.isDone) {
+                        pCount++;
+                        const itemKey = `${folder.id}_${index}`;
+                        const isActive = (folder.id === activeFolderId && index === activeItemIndex);
+                        const isBulkSelected = selectedPendingKeys.has(itemKey);
+
+                        const el = document.createElement('div');
+                        el.className = `pending-item ${isActive ? 'active' : ''} ${isBulkSelected ? 'bulk-selected' : ''} ${(item.userName || '').trim() ? 'named' : ''}`;
+                        el.setAttribute('data-pending-key', itemKey);
+                        el.draggable = true;
+
+                        el.ondragstart = (e) => {
+                            internalDragActive = true;
+                            draggedItemInfo = { folderId: folder.id, index: index };
+                            e.dataTransfer.setData('text/plain', item.customName);
+                        };
+                        el.ondragend = () => { internalDragActive = false; };
+
+                        el.ondragover = (e) => e.preventDefault();
+                        el.ondrop = (e) => {
+                            e.preventDefault();
+                            if (draggedItemInfo) {
+                                moveOrReorderItem(draggedItemInfo.folderId, draggedItemInfo.index, folder.id, index);
+                            }
+                        };
+
+                        el.innerHTML = `
+                            <img src="${item.img.src}">
+                            <button class="pending-rename" title="この写真に名前を付ける">✏️</button>
+                            <div class="title">${item.customName}</div>
+                        `;
+                        el.querySelector('.pending-rename').onclick = (ev) => {
+                            ev.stopPropagation();
+                            renamePhoto(folder.id, index);
+                        };
+                        el.onclick = () => {
+                            if (selectedPendingKeys.size > 0) {
+                                if (selectedPendingKeys.has(itemKey)) selectedPendingKeys.delete(itemKey);
+                                else selectedPendingKeys.add(itemKey);
+                                updatePendingSelectionUI();
+                            } else {
+                                loadQueueItem(folder.id, index);
+                            }
+                        };
+                        pendingList.appendChild(el);
+                    }
+                });
+            });
+
+            pendingCount.innerText = pCount;
+            const totalItems = folders.reduce((sum, f) => sum + f.items.length, 0);
+            dropOverlay.style.display = totalItems > 0 ? 'none' : 'block';
+            updatePendingSelectionUI();
+        }
+
+        function updatePendingSelectionUI() {
+            if (selectedPendingKeys.size > 0) {
+                pendingBatchTools.style.display = 'flex';
+                pendingSelectedCount.innerText = selectedPendingKeys.size;
+            } else {
+                pendingBatchTools.style.display = 'none';
+            }
+
+            document.querySelectorAll('.pending-item').forEach(el => {
+                const key = el.getAttribute('data-pending-key');
+                el.classList.toggle('bulk-selected', selectedPendingKeys.has(key));
+            });
+        }
+
+        // --- 未完了リストでのドラッグ範囲一括選択ロジック ---
+        let isPendingSelecting = false;
+        let pendingSelectStartPos = { x: 0, y: 0 };
+        let pendingLongPressTimer = null;
+
+        pendingList.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+
+            pendingSelectStartPos = { x: e.clientX, y: e.clientY };
+            const isCtrl = e.ctrlKey || e.metaKey;
+
+            if (isCtrl) {
+                startPendingSelection(e);
+            } else {
+                pendingLongPressTimer = setTimeout(() => {
+                    startPendingSelection(e);
+                }, 220);
+            }
+        });
+
+        function startPendingSelection(e) {
+            isPendingSelecting = true;
+            pendingSelectBox.style.display = 'block';
+            pendingSelectBox.style.left = `${e.clientX}px`;
+            pendingSelectBox.style.top = `${e.clientY}px`;
+            pendingSelectBox.style.width = '0px';
+            pendingSelectBox.style.height = '0px';
+        }
+
+        window.addEventListener('pointermove', (e) => {
+            if (pendingLongPressTimer) {
+                if (Math.hypot(e.clientX - pendingSelectStartPos.x, e.clientY - pendingSelectStartPos.y) > 10) {
+                    clearTimeout(pendingLongPressTimer);
+                    pendingLongPressTimer = null;
+                }
+            }
+
+            if (!isPendingSelecting) return;
+
+            const currentX = e.clientX;
+            const currentY = e.clientY;
+            const left = Math.min(pendingSelectStartPos.x, currentX);
+            const top = Math.min(pendingSelectStartPos.y, currentY);
+            const width = Math.abs(currentX - pendingSelectStartPos.x);
+            const height = Math.abs(currentY - pendingSelectStartPos.y);
+
+            pendingSelectBox.style.left = `${left}px`;
+            pendingSelectBox.style.top = `${top}px`;
+            pendingSelectBox.style.width = `${width}px`;
+            pendingSelectBox.style.height = `${height}px`;
+
+            const boxRect = { left, top, right: left + width, bottom: top + height };
+
+            document.querySelectorAll('.pending-item').forEach(itemEl => {
+                const itemRect = itemEl.getBoundingClientRect();
+                const key = itemEl.getAttribute('data-pending-key');
+                const isIntersect = !(boxRect.right < itemRect.left || 
+                                     boxRect.left > itemRect.right || 
+                                     boxRect.bottom < itemRect.top || 
+                                     boxRect.top > itemRect.bottom);
+                if (isIntersect) {
+                    selectedPendingKeys.add(key);
+                } else if (!e.ctrlKey) {
+                    selectedPendingKeys.delete(key);
+                }
+            });
+            updatePendingSelectionUI();
+        });
+
+        window.addEventListener('pointerup', () => {
+            if (pendingLongPressTimer) {
+                clearTimeout(pendingLongPressTimer);
+                pendingLongPressTimer = null;
+            }
+            if (isPendingSelecting) {
+                isPendingSelecting = false;
+                pendingSelectBox.style.display = 'none';
+            }
+        });
+
+        clearPendingSelectionBtn.addEventListener('click', () => {
+            selectedPendingKeys.clear();
+            updatePendingSelectionUI();
+        });
+
+        bulkDeletePendingBtn.addEventListener('click', () => {
+            if (selectedPendingKeys.size === 0) return;
+            if (confirm(`選択した ${selectedPendingKeys.size} 件の未完了写真を削除しますか？`)) {
+                let targets = Array.from(selectedPendingKeys).map(key => {
+                    const [folderId, idxStr] = key.split('_');
+                    return { folderId, index: parseInt(idxStr) };
+                }).sort((a, b) => b.index - a.index);
+
+                targets.forEach(t => removeItem(t.folderId, t.index));
+                selectedPendingKeys.clear();
+                updatePendingSelectionUI();
+                renderUI();
+                saveToDB();
+                status.innerText = "範囲選択された未完了写真を削除しました。";
+            }
+        });
+
+        bulkConfirmPendingBtn.addEventListener('click', async () => {
+            if (selectedPendingKeys.size === 0) return;
+            status.innerText = `${selectedPendingKeys.size} 件の写真を一括確定処理中 (200KB以下最適化)...`;
+
+            for (const key of selectedPendingKeys) {
+                const [folderId, idxStr] = key.split('_');
+                const folder = folders.find(f => f.id === folderId);
+                const idx = parseInt(idxStr);
+                if (folder && folder.items[idx]) {
+                    const item = folder.items[idx];
+                    const blob = await processSingleItemBlob(item);
+                    item.processedBlob = blob;
+                    item.isDone = true;
+                }
+            }
+
+            selectedPendingKeys.clear();
+            updatePendingSelectionUI();
+            renderUI();
+            saveToDB();
+            status.innerText = "選択された写真を一括確定し完了パネルへ移動しました！";
+        });
+
+        function renderCompletedTree() {
+            completedTree.innerHTML = '';
+            selectionBar.style.display = selectedItemKeys.size > 0 ? 'flex' : 'none';
+            selectedCountEl.innerText = selectedItemKeys.size;
+
+            folders.forEach(folder => {
+                const doneItems = folder.items.filter(i => i.isDone);
+                const isCurrentActiveFolder = (folder.id === activeFolderId);
+
+                const folderNode = document.createElement('div');
+                folderNode.className = `folder-node ${folder.isOpen ? '' : 'closed'} ${isCurrentActiveFolder ? 'active-folder' : ''}`;
+
+                folderNode.ondragover = (e) => {
+                    e.preventDefault();
+                    folderNode.classList.add('drag-over');
+                };
+                folderNode.ondragleave = () => folderNode.classList.remove('drag-over');
+                folderNode.ondrop = (e) => {
+                    e.preventDefault();
+                    folderNode.classList.remove('drag-over');
+                    if (draggedItemInfo) {
+                        moveOrReorderItem(draggedItemInfo.folderId, draggedItemInfo.index, folder.id, folder.items.length);
+                    }
+                };
+
+                const header = document.createElement('div');
+                header.className = 'folder-header';
+                header.innerHTML = `
+                    <span class="folder-arrow">▼</span>
+                    <div class="folder-title">${folder.name} (${doneItems.length})</div>
+                `;
+
+                header.onclick = (e) => {
+                    if (e.target.classList.contains('icon-btn')) return;
+                    activeFolderId = folder.id;
+                    folder.isOpen = !folder.isOpen;
+                    renderUI();
+                };
+
+                const folderActions = document.createElement('div');
+                folderActions.className = 'item-actions';
+
+                const editFolderBtn = document.createElement('button');
+                editFolderBtn.className = 'icon-btn edit-btn';
+                editFolderBtn.innerHTML = '✏️';
+                editFolderBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const newName = prompt("新しいフォルダ名を入力してください:", folder.name);
+                    if (newName && newName.trim()) { 
+                        folder.name = newName.trim(); 
+                        updateItemNames();
+                        renderUI(); 
+                        saveToDB(); 
+                    }
+                };
+                folderActions.appendChild(editFolderBtn);
+
+                if (doneItems.length > 0) {
+                    const dlBtn = document.createElement('button');
+                    dlBtn.className = 'icon-btn dl-btn';
+                    dlBtn.innerHTML = '⬇';
+                    dlBtn.title = 'フォルダ内の全確定画像をDL';
+                    dlBtn.onclick = (e) => { e.stopPropagation(); downloadFolderItems(folder); };
+                    folderActions.appendChild(dlBtn);
+                }
+
+                header.appendChild(folderActions);
+                folderNode.appendChild(header);
+
+                const itemsContainer = document.createElement('div');
+                itemsContainer.className = 'folder-items';
+
+                folder.items.forEach((item, index) => {
+                    if (!item.isDone) return;
+
+                    const itemKey = `${folder.id}_${index}`;
+                    const isSelected = selectedItemKeys.has(itemKey);
+                    const isActive = (folder.id === activeFolderId && index === activeItemIndex);
+                    
+                    const itemEl = document.createElement('div');
+                    itemEl.className = `queue-item ${isActive ? 'active' : ''} ${isSelected ? 'selected' : ''}`;
+                    itemEl.draggable = true;
+
+                    itemEl.ondragstart = (e) => {
+                        internalDragActive = true;
+                        draggedItemInfo = { folderId: folder.id, index: index };
+                        e.dataTransfer.setData('text/plain', item.customName);
+                    };
+                    itemEl.ondragend = () => { internalDragActive = false; };
+
+                    itemEl.ondragover = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        itemEl.classList.add('drag-insert-above');
+                    };
+
+                    itemEl.ondragleave = () => itemEl.classList.remove('drag-insert-above');
+
+                    itemEl.ondrop = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        itemEl.classList.remove('drag-insert-above');
+                        if (draggedItemInfo) {
+                            moveOrReorderItem(draggedItemInfo.folderId, draggedItemInfo.index, folder.id, index);
+                        }
+                    };
+
+                    let pressTimer = null;
+                    itemEl.onpointerdown = (e) => {
+                        if (e.target.classList.contains('icon-btn')) return;
+                        pressTimer = setTimeout(() => {
+                            toggleItemSelection(itemKey);
+                        }, 500);
+                    };
+
+                    itemEl.onpointerup = itemEl.onpointerleave = () => {
+                        if (pressTimer) clearTimeout(pressTimer);
+                    };
+
+                    itemEl.innerHTML = `
+                        <img src="${item.img.src}">
+                        <div class="info"><div class="filename">${item.customName}</div></div>
+                    `;
+
+                    const actions = document.createElement('div');
+                    actions.className = 'item-actions';
+
+                    const singleRename = document.createElement('button');
+                    singleRename.className = 'icon-btn edit-btn';
+                    singleRename.innerHTML = '✏️';
+                    singleRename.title = 'この写真に名前を付ける';
+                    singleRename.onclick = (e) => { e.stopPropagation(); renamePhoto(folder.id, index); };
+
+                    const singleDl = document.createElement('button');
+                    singleDl.className = 'icon-btn dl-btn';
+                    singleDl.innerHTML = '⬇';
+                    singleDl.onclick = (e) => { e.stopPropagation(); downloadSingleItem(item, folder.name, index); };
+
+                    const singleDel = document.createElement('button');
+                    singleDel.className = 'icon-btn del-btn';
+                    singleDel.innerHTML = '✕';
+                    singleDel.onclick = (e) => { e.stopPropagation(); removeItem(folder.id, index); };
+
+                    actions.appendChild(singleRename);
+                    actions.appendChild(singleDl);
+                    actions.appendChild(singleDel);
+                    itemEl.appendChild(actions);
+
+                    itemEl.onclick = (e) => {
+                        if (selectedItemKeys.size > 0) {
+                            toggleItemSelection(itemKey);
+                        } else {
+                            loadQueueItem(folder.id, index);
+                        }
+                    };
+                    itemsContainer.appendChild(itemEl);
+                });
+
+                folderNode.appendChild(itemsContainer);
+                completedTree.appendChild(folderNode);
+            });
+        }
+
+        function moveOrReorderItem(fromFolderId, fromIndex, toFolderId, toIndex) {
+            const fromFolder = folders.find(f => f.id === fromFolderId);
+            const toFolder = folders.find(f => f.id === toFolderId);
+            if (!fromFolder || !toFolder) return;
+
+            const [movedItem] = fromFolder.items.splice(fromIndex, 1);
+            let targetIdx = toIndex;
+            if (fromFolderId === toFolderId && fromIndex < toIndex) {
+                targetIdx--;
+            }
+            targetIdx = Math.max(0, Math.min(targetIdx, toFolder.items.length));
+            toFolder.items.splice(targetIdx, 0, movedItem);
+
+            activeFolderId = toFolderId;
+            activeItemIndex = targetIdx;
+
+            updateItemNames();
+            renderUI();
+            saveToDB();
+            loadQueueItem(activeFolderId, activeItemIndex);
+            status.innerText = `写真を移動・並び替え（自動リネーム）しました。`;
+        }
+
+        function toggleItemSelection(itemKey) {
+            if (selectedItemKeys.has(itemKey)) {
+                selectedItemKeys.delete(itemKey);
+            } else {
+                selectedItemKeys.add(itemKey);
+            }
+            renderUI();
+        }
+
+        cancelSelectionBtn.addEventListener('click', () => {
+            selectedItemKeys.clear();
+            renderUI();
+        });
+
+        deleteSelectedBtn.addEventListener('click', () => {
+            if (selectedItemKeys.size === 0) return;
+            if (confirm(`選択した ${selectedItemKeys.size} 件の写真を削除しますか？`)) {
+                let targets = Array.from(selectedItemKeys).map(key => {
+                    const [folderId, idxStr] = key.split('_');
+                    return { folderId, index: parseInt(idxStr) };
+                }).sort((a, b) => b.index - a.index);
+
+                targets.forEach(t => {
+                    removeItem(t.folderId, t.index);
+                });
+
+                selectedItemKeys.clear();
+                updateItemNames();
+                renderUI();
+                saveToDB();
+                status.innerText = "選択された写真を削除しました。";
+            }
+        });
+
+        addFolderBtn.addEventListener('click', () => {
+            const name = prompt("新しい分類フォルダ名を入力してください:", `📁 分類グループ${folders.length + 1}`);
+            if (name && name.trim()) {
+                const newId = `folder_${Date.now()}`;
+                folders.push({ id: newId, name: name.trim(), isOpen: true, items: [] });
+                activeFolderId = newId;
+                activeItemIndex = -1;
+                renderUI();
+                saveToDB();
+                ctx.clearRect(0, 0, 1200, 1200);
+                confirmBtn.disabled = true;
+                downloadSingleBtn.disabled = true;
+                compareBtn.disabled = true;
+                status.innerText = `フォルダ「${name.trim()}」を作成しました。`;
+            }
+        });
+
+        function removeItem(folderId, index) {
+            const folder = folders.find(f => f.id === folderId);
+            if (!folder || index < 0 || index >= folder.items.length) return;
+
+            const removedItem = folder.items.splice(index, 1)[0];
+            deletedHistory.push({ folderId: folderId, index: index, item: removedItem });
+            undoBtn.disabled = false;
+
+            if (activeFolderId === folderId) {
+                if (folder.items.length === 0) {
+                    activeItemIndex = -1;
+                    ctx.clearRect(0, 0, 1200, 1200);
+                    confirmBtn.disabled = true;
+                    downloadSingleBtn.disabled = true;
+                    compareBtn.disabled = true;
+                } else if (activeItemIndex === index) {
+                    loadQueueItem(folderId, index < folder.items.length ? index : folder.items.length - 1);
+                } else if (activeItemIndex > index) {
+                    activeItemIndex--;
+                }
+            }
+            updateItemNames();
+            renderUI();
+            saveToDB();
+            status.innerText = `写真を削除しました。(Ctrl+Zで復元可能)`;
+        }
+
+        function loadQueueItem(folderId, index) {
+            const folder = folders.find(f => f.id === folderId);
+            if (!folder || index < 0 || index >= folder.items.length) return;
+
+            activeFolderId = folderId;
+            activeItemIndex = index;
+            historyStack = [];
+            selectedObjectType = null;
+            selectedArrowIndex = -1;
+
+            undoBtn.disabled = (deletedHistory.length === 0);
+            confirmBtn.disabled = false;
+            downloadSingleBtn.disabled = false;
+            compareBtn.disabled = false;
+
+            const targetItem = folder.items[activeItemIndex];
+
+            canvas.width = 1200; canvas.height = 1200;
+
+            currentImageAngle = targetItem.imageAngle || 0;
+            currentImageScale = targetItem.imageScale || 1.0;
+            currentOffsetX = targetItem.offsetX || 0;
+            currentOffsetY = targetItem.offsetY || 0;
+
+            renderTransformImageToCanvas(rawCtx, targetItem.img, currentImageAngle, currentImageScale, currentOffsetX, currentOffsetY);
+
+            baseCtx.clearRect(0, 0, 1200, 1200);
+            baseCtx.drawImage(targetItem.cleanCanvas, 0, 0);
+
+            if (targetItem.vignetteShape && targetItem.vignetteShape.applied) {
+                shape = { ...targetItem.vignetteShape };
+                bgDarkness = targetItem.vignetteShape.darkness || 0.70;
+                darknessSlider.value = bgDarkness;
+                darknessValue.innerText = `${Math.round(bgDarkness * 100)}%`;
+                isEditing = true;
+                drawGuide();
+            } else {
+                isEditing = false;
+                refreshMainCanvas();
+            }
+
+            renderUI();
+            status.innerText = `[${folder.name}] ${activeItemIndex + 1}/${folder.items.length}: ${targetItem.customName}`;
+        }
+
+        function drawGuideLines() {
+            if (!showGridCheck.checked) return;
+
+            ctx.save();
+            ctx.lineWidth = 1;
+
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+            ctx.setLineDash([6, 6]);
+
+            ctx.beginPath(); ctx.moveTo(400, 0); ctx.lineTo(400, 1200); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(800, 0); ctx.lineTo(800, 1200); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, 400); ctx.lineTo(1200, 400); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, 800); ctx.lineTo(1200, 800); ctx.stroke();
+
+            ctx.setLineDash([]);
+            const isXCentered = Math.abs(currentOffsetX) < 1;
+            const isYCentered = Math.abs(currentOffsetY) < 1;
+
+            ctx.strokeStyle = isXCentered ? "#00e676" : "rgba(0, 188, 212, 0.6)";
+            ctx.lineWidth = isXCentered ? 2 : 1;
+            ctx.beginPath(); ctx.moveTo(600, 0); ctx.lineTo(600, 1200); ctx.stroke();
+
+            ctx.strokeStyle = isYCentered ? "#00e676" : "rgba(0, 188, 212, 0.6)";
+            ctx.lineWidth = isYCentered ? 2 : 1;
+            ctx.beginPath(); ctx.moveTo(0, 600); ctx.lineTo(1200, 600); ctx.stroke();
+
+            ctx.fillStyle = (isXCentered && isYCentered) ? "#00e676" : "#00bcd4";
+            ctx.beginPath(); ctx.arc(600, 600, 6, 0, Math.PI * 2); ctx.fill();
+
+            ctx.restore();
+        }
+
+        // --- 矢印（片方向・双方向）の描画ロジック ---
+        function drawSingleArrowObject(targetCtx, arrowObj, isSelected = false) {
+            const start = arrowObj.start;
+            const end = arrowObj.end;
+            const color = arrowObj.color || "#ff0000";
+            const isDouble = arrowObj.arrowType === 'double';
+            const headLength = 26;
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const angle = Math.atan2(dy, dx);
+
+            targetCtx.save();
+            targetCtx.strokeStyle = color;
+            targetCtx.fillStyle = color;
+            targetCtx.lineWidth = 6;
+            targetCtx.lineCap = "round";
+
+            targetCtx.beginPath();
+            targetCtx.moveTo(start.x, start.y);
+            targetCtx.lineTo(end.x, end.y);
+            targetCtx.stroke();
+
+            // 終点側の矢尻
+            targetCtx.beginPath();
+            targetCtx.moveTo(end.x, end.y);
+            targetCtx.lineTo(end.x - headLength * Math.cos(angle - Math.PI / 6), end.y - headLength * Math.sin(angle - Math.PI / 6));
+            targetCtx.lineTo(end.x - headLength * Math.cos(angle + Math.PI / 6), end.y - headLength * Math.sin(angle + Math.PI / 6));
+            targetCtx.closePath();
+            targetCtx.fill();
+
+            // 始点側の矢尻 (双方向の場合)
+            if (isDouble) {
+                targetCtx.beginPath();
+                targetCtx.moveTo(start.x, start.y);
+                targetCtx.lineTo(start.x + headLength * Math.cos(angle - Math.PI / 6), start.y + headLength * Math.sin(angle - Math.PI / 6));
+                targetCtx.lineTo(start.x + headLength * Math.cos(angle + Math.PI / 6), start.y + headLength * Math.sin(angle + Math.PI / 6));
+                targetCtx.closePath();
+                targetCtx.fill();
+            }
+
+            if (isSelected) {
+                targetCtx.strokeStyle = "#00bcd4";
+                targetCtx.lineWidth = 3;
+                targetCtx.setLineDash([6, 4]);
+                targetCtx.beginPath();
+                targetCtx.moveTo(start.x, start.y);
+                targetCtx.lineTo(end.x, end.y);
+                targetCtx.stroke();
+
+                targetCtx.setLineDash([]);
+                targetCtx.fillStyle = "#00bcd4";
+                targetCtx.beginPath(); targetCtx.arc(start.x, start.y, 8, 0, Math.PI * 2); targetCtx.fill();
+                targetCtx.beginPath(); targetCtx.arc(end.x, end.y, 8, 0, Math.PI * 2); targetCtx.fill();
+            }
+
+            if (arrowObj.lengthMm && arrowObj.lengthMm.trim() !== '') {
+                const midX = (start.x + end.x) / 2;
+                const midY = (start.y + end.y) / 2;
+                const valStr = arrowObj.lengthMm.trim();
+                const text = valStr.endsWith('mm') ? valStr : `${valStr}mm`;
+
+                targetCtx.font = "bold 20px sans-serif";
+                const textWidth = targetCtx.measureText(text).width;
+                const padX = 8, padY = 5;
+
+                targetCtx.fillStyle = "rgba(255, 255, 255, 0.95)";
+                targetCtx.strokeStyle = isSelected ? "#00bcd4" : color;
+                targetCtx.lineWidth = 2;
+                targetCtx.beginPath();
+                if (targetCtx.roundRect) {
+                    targetCtx.roundRect(midX - textWidth/2 - padX, midY - 14 - padY, textWidth + padX*2, 28 + padY, 5);
+                } else {
+                    targetCtx.rect(midX - textWidth/2 - padX, midY - 14 - padY, textWidth + padX*2, 28 + padY);
+                }
+                targetCtx.fill();
+                targetCtx.stroke();
+
+                targetCtx.fillStyle = "#111111";
+                targetCtx.textAlign = "center";
+                targetCtx.textBaseline = "middle";
+                targetCtx.fillText(text, midX, midY);
+            }
+
+            targetCtx.restore();
+        }
+
+        function renderAllArrowsOnTop(targetCtx) {
+            const item = getActiveItem();
+            if (item && item.arrows) {
+                item.arrows.forEach((arr, idx) => {
+                    const isSel = (selectedObjectType === 'arrow' && selectedArrowIndex === idx);
+                    drawSingleArrowObject(targetCtx, arr, isSel);
+                });
+            }
+            if (activeTempArrow) {
+                drawSingleArrowObject(targetCtx, activeTempArrow, false);
+            }
+        }
+
+        function refreshMainCanvas() {
+            ctx.clearRect(0, 0, 1200, 1200);
+            ctx.drawImage(baseCanvas, 0, 0);
+
+            const item = getActiveItem();
+            if (item && item.vignetteShape && item.vignetteShape.applied && !isEditing) {
+                drawDarkOverlayForShape(ctx, item.vignetteShape);
+            }
+
+            if (currentMode === 'select' || isEditing) {
+                drawGuideLines();
+            }
+
+            renderAllArrowsOnTop(ctx);
+
+            if (isSnappedToParallel) {
+                ctx.save();
+                ctx.fillStyle = "#ffeb3b";
+                ctx.font = "bold 16px sans-serif";
+                ctx.shadowColor = "#000";
+                ctx.shadowBlur = 4;
+                ctx.fillText("=== 平行吸着中 ===", 20, 40);
+                ctx.restore();
+            }
+        }
+
+        function syncActiveItemCanvas(persist = true) {
+            const item = getActiveItem();
+            if (item && item.cleanCanvas) {
+                const cCtx = item.cleanCanvas.getContext('2d');
+                cCtx.clearRect(0, 0, 1200, 1200);
+                cCtx.drawImage(baseCanvas, 0, 0);
+                if (persist) saveToDB();
+            }
+        }
+
+        // ドラッグ／ホイール中は保存せず、操作が止まってからまとめて保存する
+        let transformCommitTimer = null;
+        function scheduleTransformCommit() {
+            clearTimeout(transformCommitTimer);
+            transformCommitTimer = setTimeout(() => syncActiveItemCanvas(true), 400);
+        }
+
+        openVaultBtn.addEventListener('click', () => {
+            renderVaultTable();
+            vaultModal.style.display = 'flex';
+        });
+
+        closeVaultBtn.addEventListener('click', () => vaultModal.style.display = 'none');
+
+        function renderVaultTable() {
+            vaultTableBody.innerHTML = '';
+            folders.forEach(folder => {
+                folder.items.forEach((item, index) => {
+                    const itemKey = `${folder.id}_${index}`;
+                    const isSelected = selectedItemKeys.has(itemKey);
+                    
+                    const tr = document.createElement('tr');
+                    tr.className = `vault-row ${isSelected ? 'selected' : ''}`;
+
+                    tr.innerHTML = `
+                        <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleItemSelection('${itemKey}'); renderVaultTable();"></td>
+                        <td><img src="${item.img.src}"></td>
+                        <td><strong>${folder.name}</strong></td>
+                        <td>
+                            <strong>${item.customName}</strong>
+                            ${(item.userName || '').trim() ? '<span style="font-size:10px; color:#ff9800; margin-left:4px;">個別名</span>' : ''}
+                            <button class="icon-btn edit-btn" style="margin-left:6px;" title="この写真に名前を付ける" onclick="renamePhoto('${folder.id}', ${index}); renderVaultTable();">✏️</button>
+                        </td>
+                        <td>
+                            <span class="status-badge ${item.isDone ? 'badge-done' : 'badge-pending'}">
+                                ${item.isDone ? '✓ 完了（右パネル）' : '⏳ 未完了（中央）'}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn-secondary" style="font-size:10px; padding:3px 6px;" onclick="loadQueueItem('${folder.id}', ${index}); vaultModal.style.display='none';">編集</button>
+                            <button class="btn-secondary" style="font-size:10px; padding:3px 6px; background:#17a2b8;" onclick="downloadSingleItem(folders.find(f=>f.id==='${folder.id}').items[${index}], '${folder.name}', ${index})">DL</button>
+                            <button class="btn-danger" style="font-size:10px; padding:3px 6px;" onclick="removeItem('${folder.id}', ${index}); renderVaultTable();">削除</button>
+                        </td>
+                    `;
+                    vaultTableBody.appendChild(tr);
+                });
+            });
+        }
+
+        selectAllVault.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                folders.forEach(f => f.items.forEach((_, idx) => selectedItemKeys.add(`${f.id}_${idx}`)));
+            } else {
+                selectedItemKeys.clear();
+            }
+            renderVaultTable();
+            renderUI();
+        });
+
+        driveSyncBtn.addEventListener('click', async () => {
+            const token = prompt("Google Drive OAuth アクセストークンを入力してください:\n※写真保管庫の全確定画像をGoogle Driveへ送信します。");
+            if (!token) return;
+
+            status.innerText = "Google Driveへ同期アップロード中...";
+            let uploadedCount = 0;
+
+            for (const folder of folders) {
+                for (const item of folder.items) {
+                    if (item.processedBlob) {
+                        try {
+                            const metadata = { name: `${item.customName}.jpg`, mimeType: 'image/jpeg' };
+                            const formData = new FormData();
+                            formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                            formData.append('file', item.processedBlob);
+
+                            await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` },
+                                body: formData
+                            });
+                            uploadedCount++;
+                        } catch (err) {
+                            console.error(err);
+                        }
+                    }
+                }
+            }
+            status.innerText = `Google Drive同期完了！ (${uploadedCount} 件送信完了)`;
+        });
+
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        ['pointerdown', 'mousedown'].forEach(evt => {
+            compareBtn.addEventListener(evt, () => showBeforeCompare());
+        });
+
+        ['pointerup', 'mouseleave', 'mouseup'].forEach(evt => {
+            compareBtn.addEventListener(evt, () => hideBeforeCompare());
+        });
+
+        function showBeforeCompare() {
+            if (activeItemIndex === -1) return;
+            ctx.clearRect(0, 0, 1200, 1200);
+            ctx.drawImage(rawCanvas, 0, 0);
+            compareBadge.style.display = 'block';
+        }
+
+        function hideBeforeCompare() {
+            if (activeItemIndex === -1) return;
+            compareBadge.style.display = 'none';
+            if (isEditing && currentMode === 'vignette') drawGuide();
+            else refreshMainCanvas();
+        }
+
+        function saveState() {
+            if (historyStack.length >= 10) historyStack.shift();
+            const item = getActiveItem();
+            historyStack.push({
+                imgData: baseCtx.getImageData(0, 0, 1200, 1200),
+                arrows: item && item.arrows ? JSON.parse(JSON.stringify(item.arrows)) : []
+            });
+            undoBtn.disabled = false;
+        }
+
+        function undo() {
+            if (isEditing) {
+                cancelEditing();
+                return;
+            }
+            if (historyStack.length > 0) {
+                const prev = historyStack.pop();
+                baseCtx.putImageData(prev.imgData, 0, 0);
+                const item = getActiveItem();
+                if (item) item.arrows = prev.arrows;
+                syncActiveItemCanvas();
+                refreshMainCanvas();
+                status.innerText = "1つ前の状態に戻しました。";
+                if (historyStack.length === 0 && deletedHistory.length === 0) undoBtn.disabled = true;
+            } 
+            else if (deletedHistory.length > 0) {
+                const restored = deletedHistory.pop();
+                let folder = folders.find(f => f.id === restored.folderId);
+                if (!folder) folder = folders[0];
+
+                const insertIdx = Math.min(restored.index, folder.items.length);
+                folder.items.splice(insertIdx, 0, restored.item);
+                updateItemNames();
+                renderUI();
+                saveToDB();
+                loadQueueItem(folder.id, insertIdx);
+                status.innerText = "削除した写真を復元しました。";
+                if (deletedHistory.length === 0) undoBtn.disabled = true;
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault(); undo();
+            } else if (e.key === 'Enter') {
+                confirmAndNext();
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                const item = getActiveItem();
+
+                if (selectedObjectType === 'arrow' && item && item.arrows && selectedArrowIndex !== -1 && item.arrows[selectedArrowIndex]) {
+                    e.preventDefault();
+                    saveState();
+                    item.arrows.splice(selectedArrowIndex, 1);
+                    selectedObjectType = null;
+                    selectedArrowIndex = -1;
+                    saveToDB();
+                    refreshMainCanvas();
+                    status.innerText = "選択された矢印を削除しました。";
+                    return;
+                }
+
+                if (selectedObjectType === 'vignette') {
+                    e.preventDefault();
+                    saveState();
+                    if (item) item.vignetteShape = null;
+                    isEditing = false;
+                    selectedObjectType = null;
+                    saveToDB();
+                    refreshMainCanvas();
+                    status.innerText = "背景暗化（楕円枠）を削除しました。";
+                    return;
+                }
+
+                if (!isEditing && activeItemIndex !== -1) {
+                    removeItem(activeFolderId, activeItemIndex);
+                }
+            }
+        });
+
+        darknessSlider.addEventListener('input', (e) => {
+            bgDarkness = parseFloat(e.target.value);
+            darknessValue.innerText = `${Math.round(bgDarkness * 100)}%`;
+            if (isEditing && currentMode === 'vignette') drawGuide();
+        });
+
+        showGridCheck.addEventListener('change', refreshMainCanvas);
+        enableSnapCheck.addEventListener('change', applyImageTransform);
+
+        fitCoverBtn.addEventListener('click', () => {
+            const item = getActiveItem();
+            if (!item || !item.img) return;
+
+            const requiredScale = Math.max(item.img.width, item.img.height) / Math.min(item.img.width, item.img.height);
+            currentImageScale = requiredScale;
+            currentOffsetX = 0;
+            currentOffsetY = 0;
+            currentImageAngle = 0;
+            applyImageTransform();
+            status.innerText = "余白なし（全画面フィット）に吸着固定しました。";
+        });
+
+        function applySnapping() {
+            if (!enableSnapCheck.checked) return;
+            const item = getActiveItem();
+            if (!item || !item.img) return;
+
+            const SNAP_THRESHOLD = 18;
+
+            if (Math.abs(currentOffsetX) < SNAP_THRESHOLD) currentOffsetX = 0;
+            if (Math.abs(currentOffsetY) < SNAP_THRESHOLD) currentOffsetY = 0;
+
+            const baseScale = (1200 / Math.max(item.img.width, item.img.height)) * currentImageScale;
+            const imgW = item.img.width * baseScale;
+            const imgH = item.img.height * baseScale;
+
+            const left = 600 + currentOffsetX - imgW / 2;
+            const right = 600 + currentOffsetX + imgW / 2;
+            const top = 600 + currentOffsetY - imgH / 2;
+            const bottom = 600 + currentOffsetY + imgH / 2;
+
+            if (Math.abs(left) < SNAP_THRESHOLD) currentOffsetX = imgW / 2 - 600;
+            if (Math.abs(right - 1200) < SNAP_THRESHOLD) currentOffsetX = 600 - imgW / 2;
+            if (Math.abs(top) < SNAP_THRESHOLD) currentOffsetY = imgH / 2 - 600;
+            if (Math.abs(bottom - 1200) < SNAP_THRESHOLD) currentOffsetY = 1200 - imgH / 2;
+
+            if (imgW >= 1200) {
+                if (600 + currentOffsetX - imgW / 2 > 0) currentOffsetX = imgW / 2 - 600;
+                if (600 + currentOffsetX + imgW / 2 < 1200) currentOffsetX = 600 - imgW / 2;
+            }
+            if (imgH >= 1200) {
+                if (600 + currentOffsetY - imgH / 2 > 0) currentOffsetY = imgH / 2 - 600;
+                if (600 + currentOffsetY + imgH / 2 < 1200) currentOffsetY = 1200 - imgH / 2;
+            }
+        }
+
+        // history/persist を false にすると、履歴保存とDB保存を省いて描画だけ行う。
+        // （ドラッグ中に毎フレーム 1200x1200 の ImageData と全写真のDataURL化をしていたため重かった）
+        function applyImageTransform(opts) {
+            const history = !opts || opts.history !== false;
+            const persist = !opts || opts.persist !== false;
+
+            const item = getActiveItem();
+            if (!item) return;
+
+            applySnapping();
+
+            if (history) saveState();
+            item.imageAngle = currentImageAngle;
+            item.imageScale = currentImageScale;
+            item.offsetX = currentOffsetX;
+            item.offsetY = currentOffsetY;
+
+            renderTransformImageToCanvas(rawCtx, item.img, currentImageAngle, currentImageScale, currentOffsetX, currentOffsetY);
+            renderTransformImageToCanvas(baseCtx, item.img, currentImageAngle, currentImageScale, currentOffsetX, currentOffsetY);
+
+            syncActiveItemCanvas(persist);
+            if (isEditing && currentMode === 'vignette') drawGuide();
+            else refreshMainCanvas();
+        }
+
+        // ============================================================
+        //  マウスホイールで写真だけを拡大・縮小する
+        //  （preventDefault でブラウザ自体の拡大／ページスクロールを止める）
+        // ============================================================
+        const MIN_IMAGE_SCALE = 0.3;
+        const MAX_IMAGE_SCALE = 6.0;
+        let wheelGestureActive = false;
+        let wheelEndTimer = null;
+
+        canvas.addEventListener('wheel', (e) => {
+            if (activeItemIndex === -1) return;
+            e.preventDefault();      // ← これが無いと画面全体が縮む／スクロールする
+            e.stopPropagation();
+
+            const item = getActiveItem();
+            if (!item || !item.img) return;
+
+            // ホイールを回し始めた時だけ履歴を1回とる（Ctrl+Z で回す前に戻せる）
+            if (!wheelGestureActive) { saveState(); wheelGestureActive = true; }
+
+            const pos = getPos(e);
+            const prevScale = currentImageScale;
+
+            // deltaMode: 0=ピクセル, 1=行, 2=ページ。行単位のマウスも同じ感覚にする
+            let delta = e.deltaY;
+            if (e.deltaMode === 1) delta *= 16;
+            else if (e.deltaMode === 2) delta *= 100;
+
+            currentImageScale = Math.min(Math.max(MIN_IMAGE_SCALE, prevScale * Math.pow(1.0018, -delta)), MAX_IMAGE_SCALE);
+            const ratio = currentImageScale / prevScale;
+
+            if (ratio !== 1) {
+                // カーソルの下にある被写体の位置が動かないように中心をずらす
+                currentOffsetX = pos.x - 600 - (pos.x - 600 - currentOffsetX) * ratio;
+                currentOffsetY = pos.y - 600 - (pos.y - 600 - currentOffsetY) * ratio;
+            }
+
+            applyImageTransform({ history: false, persist: false });
+            status.innerText = `拡大率 ${Math.round(currentImageScale * 100)}%（ホイールで拡大縮小 / ドラッグで移動 / ダブルクリックで等倍）`;
+
+            clearTimeout(wheelEndTimer);
+            wheelEndTimer = setTimeout(() => {
+                wheelGestureActive = false;
+                syncActiveItemCanvas(true);
+            }, 350);
+        }, { passive: false });
+
+        // ダブルクリックで等倍・中央に戻す
+        canvas.addEventListener('dblclick', (e) => {
+            if (activeItemIndex === -1 || currentMode !== 'select') return;
+            e.preventDefault();
+            currentImageScale = 1.0;
+            currentOffsetX = 0;
+            currentOffsetY = 0;
+            applyImageTransform();
+            status.innerText = "写真を等倍・中央に戻しました。";
+        });
+
+        modeSelectBtn.addEventListener('click', () => setMode('select'));
+        modeVignetteBtn.addEventListener('click', () => setMode('vignette'));
+        modeMaskBtn.addEventListener('click', () => setMode('mask'));
+        modeArrowBtn.addEventListener('click', () => setMode('arrow'));
+
+        function setMode(mode) {
+            if (isEditing) cancelEditing();
+            currentMode = mode;
+            isEyedropperActive = false;
+            isArrowEyedropperActive = false;
+            isAutoWidthActive = false;
+
+            modeSelectBtn.classList.toggle('active', mode === 'select');
+            modeVignetteBtn.classList.toggle('active', mode === 'vignette');
+            modeMaskBtn.classList.toggle('active', mode === 'mask');
+            modeArrowBtn.classList.toggle('active', mode === 'arrow');
+
+            selectTools.style.display = mode === 'select' ? 'flex' : 'none';
+            vignetteTools.style.display = mode === 'vignette' ? 'flex' : 'none';
+            brushTools.style.display = mode === 'mask' ? 'flex' : 'none';
+            arrowTools.style.display = mode === 'arrow' ? 'flex' : 'none';
+
+            if (mode === 'select') {
+                status.innerText = "① 選択・移動: 写真ドラッグに加え、矢印・楕円枠をクリックで選択してDeleteキーで消去できます。";
+            } else if (mode === 'vignette') {
+                status.innerText = "② 背景暗化: 暗くしたい範囲を楕円枠で指定してください。";
+            } else if (mode === 'mask') {
+                status.innerText = "③ 名前消し: 不要な文字やロゴをブラシで塗りつぶして消去します。";
+            } else if (mode === 'arrow') {
+                status.innerText = "④ 矢印・寸法: ドラッグで矢印を描画します。他の矢印と平行になるとピタッと吸着します。";
+            }
+            refreshMainCanvas();
+        }
+
+        arrowTypeSelect.addEventListener('change', (e) => arrowType = e.target.value);
+        arrowColorPicker.addEventListener('input', (e) => arrowColor = e.target.value);
+
+        arrowEyedropperBtn.addEventListener('click', () => {
+            isArrowEyedropperActive = true;
+            status.innerText = "【矢印スポイト】矢印の色にしたい箇所を画像からクリックしてください。";
+        });
+
+        // ============================================================
+        //  ④ 色の境界を判別して、水平の双方向矢印を自動配置する
+        //     商品の上をクリック → その色を基準に左右へ走査し、色が変わった位置＝境界
+        // ============================================================
+        let isAutoWidthActive = false;
+        let colorTolerance = 45;
+
+        colorToleranceSlider.addEventListener('input', (e) => {
+            colorTolerance = parseInt(e.target.value, 10);
+            colorToleranceValue.innerText = colorTolerance;
+        });
+
+        autoWidthBtn.addEventListener('click', () => {
+            if (activeItemIndex === -1) { status.innerText = "先に写真を選択してください。"; return; }
+            isAutoWidthActive = true;
+            isEyedropperActive = false;
+            isArrowEyedropperActive = false;
+            status.innerText = "【色で幅を自動計測】測りたい商品の上をクリックしてください。クリックした色を基準に、左右の境界を自動で探します。";
+        });
+
+        function colorDistance(d, o, r, g, b) {
+            const dr = d[o] - r, dg = d[o + 1] - g, db = d[o + 2] - b;
+            return Math.sqrt(dr * dr + dg * dg + db * db);
+        }
+
+        // 1行ぶん走査して、基準色が途切れる位置（境界）を返す
+        function scanRowEdges(data, rowOffset, startX, r, g, b, tol) {
+            const GAP = 6;   // ハイライトや影で数ピクセル色が飛ぶのを橋渡しする
+            let left = startX, right = startX;
+
+            let gap = 0;
+            for (let x = startX; x >= 0; x--) {
+                if (colorDistance(data, rowOffset + x * 4, r, g, b) <= tol) { left = x; gap = 0; }
+                else if (++gap > GAP) break;
+            }
+
+            gap = 0;
+            for (let x = startX; x < 1200; x++) {
+                if (colorDistance(data, rowOffset + x * 4, r, g, b) <= tol) { right = x; gap = 0; }
+                else if (++gap > GAP) break;
+            }
+
+            return { left, right };
+        }
+
+        function median(arr) {
+            const s = arr.slice().sort((a, b) => a - b);
+            const m = Math.floor(s.length / 2);
+            return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+        }
+
+        // クリック位置から商品の水平方向の端を検出して、双方向矢印を1本置く
+        function placeAutoWidthArrow(pos) {
+            const item = getActiveItem();
+            if (!item) return;
+
+            const cx = Math.max(0, Math.min(1199, Math.round(pos.x)));
+            const cy = Math.max(0, Math.min(1199, Math.round(pos.y)));
+
+            // 上下の数行を見て中央値をとる（1行だけだとノイズに引っ張られるため）
+            const BAND = 4;
+            const y0 = Math.max(0, cy - BAND);
+            const y1 = Math.min(1199, cy + BAND);
+            const band = baseCtx.getImageData(0, y0, 1200, y1 - y0 + 1);
+            const data = band.data;
+
+            const baseOffset = (cy - y0) * 1200 * 4;
+            const r = data[baseOffset + cx * 4];
+            const g = data[baseOffset + cx * 4 + 1];
+            const b = data[baseOffset + cx * 4 + 2];
+
+            const lefts = [], rights = [];
+            for (let row = 0; row <= y1 - y0; row++) {
+                const edges = scanRowEdges(data, row * 1200 * 4, cx, r, g, b, colorTolerance);
+                lefts.push(edges.left);
+                rights.push(edges.right);
+            }
+
+            const left = median(lefts);
+            const right = median(rights);
+            const width = right - left;
+
+            // 画面の端まで走査が抜けた＝境界が無かった（背景や余白をクリックした場合）
+            const ranToBothEdges = (left <= 1 && right >= 1198);
+
+            if (width < 20 || ranToBothEdges || width > 1140) {
+                if (width < 20) {
+                    alert("色の境界が狭すぎて判別できませんでした。\n\n"
+                        + "・「色の許容差」を上げると、色ムラや影のある商品でも拾いやすくなります。\n"
+                        + "・商品の中でも色が均一な部分をクリックしてください。");
+                    status.innerText = "境界を判別できませんでした（許容差を上げてお試しください）。";
+                } else {
+                    alert("左右どちらにも境界が見つかりませんでした。\n\n"
+                        + "・背景や余白の上をクリックしていませんか？ 商品そのものの上をクリックしてください。\n"
+                        + "・商品と背景の色が近い場合は「色の許容差」を下げてください。");
+                    status.innerText = "境界が見つかりませんでした（商品の上をクリックしてください）。";
+                }
+                return;
+            }
+
+            const mmInput = prompt(
+                `幅 ${width}px を検出しました。\n寸法の数値（mm単位）を入力してください:\n※未入力の場合は数字を表示しません`,
+                ""
+            );
+
+            saveState();
+            if (!item.arrows) item.arrows = [];
+            item.arrows.push({
+                start: { x: left, y: cy },
+                end:   { x: right, y: cy },     // y を揃えているので必ず水平になる
+                color: arrowColor,
+                arrowType: 'double',            // 双方向で固定
+                lengthMm: (mmInput && mmInput.trim() !== '') ? mmInput.trim() : ''
+            });
+
+            selectedObjectType = 'arrow';
+            selectedArrowIndex = item.arrows.length - 1;
+            saveToDB();
+            refreshMainCanvas();
+            status.innerText = `境界を検出し、水平の双方向矢印を配置しました（検出幅 ${width}px）。`;
+        }
+
+        clearArrowsBtn.addEventListener('click', () => {
+            const item = getActiveItem();
+            if (item && item.arrows && item.arrows.length > 0) {
+                saveState();
+                item.arrows = [];
+                selectedObjectType = null;
+                selectedArrowIndex = -1;
+                saveToDB();
+                refreshMainCanvas();
+                status.innerText = "全矢印を消去しました。";
+            }
+        });
+
+        eyedropperBtn.addEventListener('click', () => {
+            isEyedropperActive = true;
+            status.innerText = "【スポイト】取得したい背景色をクリックしてください。";
+        });
+
+        brushSizeSelect.addEventListener('change', (e) => brushSize = parseInt(e.target.value));
+
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: (clientX - rect.left) * (canvas.width / rect.width),
+                y: (clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+
+        function rotatePoint(px, py, cx, cy, rad) {
+            const cos = Math.cos(rad); const sin = Math.sin(rad);
+            const dx = px - cx; const dy = py - cy;
+            return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+        }
+
+        function isPosInsideShape(pos, sh) {
+            if (!sh || !sh.cx || !sh.rx) return false;
+            const localPos = rotatePoint(pos.x, pos.y, sh.cx, sh.cy, -sh.rotation);
+            return (((localPos.x - sh.cx)/sh.rx)**2 + ((localPos.y - sh.cy)/sh.ry)**2 <= 1.0);
+        }
+
+        function getHandleAtPos(pos) {
+            if (!isEditing) return null;
+            const hSize = 35;
+            const rotH = rotatePoint(shape.cx, shape.cy - shape.ry - 45, shape.cx, shape.cy, shape.rotation);
+            if (Math.hypot(pos.x - rotH.x, pos.y - rotH.y) < hSize) return 'rotate';
+
+            const handles = {
+                nw: rotatePoint(shape.cx - shape.rx, shape.cy - shape.ry, shape.cx, shape.cy, shape.rotation),
+                ne: rotatePoint(shape.cx + shape.rx, shape.cy - shape.ry, shape.cx, shape.cy, shape.rotation),
+                se: rotatePoint(shape.cx + shape.rx, shape.cy + shape.ry, shape.cx, shape.cy, shape.rotation),
+                sw: rotatePoint(shape.cx - shape.rx, shape.cy + shape.ry, shape.cx, shape.cy, shape.rotation),
+            };
+
+            for (let key in handles) {
+                if (Math.hypot(pos.x - handles[key].x, pos.y - handles[key].y) < hSize) return key;
+            }
+
+            if (isPosInsideShape(pos, shape)) return 'move';
+            return null;
+        }
+
+        function getArrowHitAtPos(pos) {
+            const item = getActiveItem();
+            if (!item || !item.arrows || item.arrows.length === 0) return null;
+
+            for (let i = item.arrows.length - 1; i >= 0; i--) {
+                const arr = item.arrows[i];
+                if (Math.hypot(pos.x - arr.start.x, pos.y - arr.start.y) < 25) {
+                    return { index: i, handle: 'start' };
+                }
+                if (Math.hypot(pos.x - arr.end.x, pos.y - arr.end.y) < 25) {
+                    return { index: i, handle: 'end' };
+                }
+                const distToSegment = distanceToLineSegment(pos, arr.start, arr.end);
+                if (distToSegment < 18) {
+                    return { index: i, handle: 'move' };
+                }
+            }
+            return null;
+        }
+
+        function distanceToLineSegment(p, a, b) {
+            const l2 = (b.x - a.x)**2 + (b.y - a.y)**2;
+            if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+            let t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)));
+        }
+
+        function rgbToHex(r, g, b) {
+            return "#" + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+        }
+
+        let pointerDownPos = null;
+        let lastStrokePos = null;
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (activeItemIndex === -1) return;
+            if (e.touches.length === 2 && currentMode === 'select') {
+                isDrawing = true;
+                saveState();          // ピンチ操作の履歴は開始時に1回だけ
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                touchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+                touchStartAngle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * (180 / Math.PI);
+                initialScaleOnTouch = currentImageScale;
+                initialAngleOnTouch = currentImageAngle;
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && isDrawing && currentMode === 'select') {
+                e.preventDefault();
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                const currentDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+                const currentAngle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * (180 / Math.PI);
+
+                const scaleFactor = currentDist / touchStartDist;
+                currentImageScale = Math.min(Math.max(0.5, initialScaleOnTouch * scaleFactor), 2.5);
+
+                const angleDiff = currentAngle - touchStartAngle;
+                currentImageAngle = Math.min(Math.max(-45, initialAngleOnTouch + angleDiff), 45);
+
+                applyImageTransform({ history: false, persist: false });
+                scheduleTransformCommit();
+            }
+        });
+
+        canvas.addEventListener('pointerdown', (e) => {
+            if (activeItemIndex === -1) return;
+            const pos = getPos(e);
+            pointerDownPos = pos;
+
+            if (e.button === 2) {
+                showBeforeCompare();
+                return;
+            }
+
+            if (isEyedropperActive) {
+                const pixel = baseCtx.getImageData(Math.floor(pos.x), Math.floor(pos.y), 1, 1).data;
+                currentColor = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+                colorDisplay.style.background = currentColor;
+                isEyedropperActive = false;
+                status.innerText = "色を取得しました。文字の上を撫でて消去してください。";
+                return;
+            }
+
+            if (isArrowEyedropperActive) {
+                const pixel = baseCtx.getImageData(Math.floor(pos.x), Math.floor(pos.y), 1, 1).data;
+                arrowColor = rgbToHex(pixel[0], pixel[1], pixel[2]);
+                arrowColorPicker.value = arrowColor;
+                isArrowEyedropperActive = false;
+                status.innerText = "矢印の色を取得しました！";
+                return;
+            }
+
+            if (isAutoWidthActive) {
+                isAutoWidthActive = false;
+                placeAutoWidthArrow(pos);
+                return;
+            }
+
+            if (currentMode === 'select') {
+                const arrHit = getArrowHitAtPos(pos);
+                if (arrHit) {
+                    selectedObjectType = 'arrow';
+                    selectedArrowIndex = arrHit.index;
+                    activeSelectTarget = 'arrow';
+                    activeArrowHandle = arrHit.handle;
+                    isDrawing = true;
+                    dragStartPos = pos;
+                    saveState();
+                    refreshMainCanvas();
+                    status.innerText = "矢印を選択中 (Deleteキーで個別に削除可能)";
+                    return;
+                }
+
+                const h = getHandleAtPos(pos);
+                if (h) {
+                    selectedObjectType = 'vignette';
+                    activeSelectTarget = 'vignette';
+                    activeHandle = h;
+                    isDrawing = true;
+                    dragStartPos = pos;
+                    refreshMainCanvas();
+                    status.innerText = "背景暗化（楕円枠）を選択中 (Deleteキーで消去可能)";
+                    return;
+                }
+                const item = getActiveItem();
+                const checkShape = (item && item.vignetteShape && item.vignetteShape.applied) ? item.vignetteShape : (isEditing ? shape : null);
+                if (checkShape && isPosInsideShape(pos, checkShape)) {
+                    shape = { ...checkShape };
+                    isEditing = true;
+                    selectedObjectType = 'vignette';
+                    activeSelectTarget = 'vignette';
+                    activeHandle = 'move';
+                    isDrawing = true;
+                    dragStartPos = pos;
+                    drawGuide();
+                    status.innerText = "背景暗化（楕円枠）を選択中 (Deleteキーで消去可能)";
+                    return;
+                }
+
+                selectedObjectType = null;
+                selectedArrowIndex = -1;
+                activeSelectTarget = 'image';
+                isDrawing = true;
+                dragStartPos = pos;
+                saveState();          // 移動の履歴はドラッグ開始時に1回だけ
+                refreshMainCanvas();
+                return;
+            }
+
+            if (currentMode === 'mask') {
+                saveState();
+                isDrawing = true;
+                lastStrokePos = pos;
+                drawBrushStroke(pos, pos);
+                return;
+            }
+
+            if (currentMode === 'arrow') {
+                saveState();
+                isDrawing = true;
+                dragStartPos = pos;
+                activeTempArrow = { start: dragStartPos, end: pos, color: arrowColor, arrowType: arrowType, lengthMm: '' };
+                return;
+            }
+
+            if (currentMode === 'vignette') {
+                const item = getActiveItem();
+                
+                if (isEditing) {
+                    activeHandle = getHandleAtPos(pos);
+                    if (activeHandle) { 
+                        selectedObjectType = 'vignette';
+                        isDrawing = true; 
+                        dragStartPos = pos; 
+                        return; 
+                    }
+                }
+
+                const checkShape = (item && item.vignetteShape && item.vignetteShape.applied) 
+                    ? item.vignetteShape 
+                    : (isEditing ? shape : null);
+
+                if (checkShape && isPosInsideShape(pos, checkShape)) {
+                    shape = { ...checkShape };
+                    bgDarkness = checkShape.darkness || bgDarkness;
+                    darknessSlider.value = bgDarkness;
+                    darknessValue.innerText = `${Math.round(bgDarkness * 100)}%`;
+                    isEditing = true;
+                    selectedObjectType = 'vignette';
+                    activeHandle = 'move';
+                    isDrawing = true;
+                    dragStartPos = pos;
+                    drawGuide();
+                    status.innerText = "既存楕円の編集モードへ移行しました。";
+                    return;
+                }
+            }
+
+            isEditing = false;
+            selectedObjectType = null;
+            isDrawing = true;
+            points = [pos];
+        });
+
+        let points = [];
+        canvas.addEventListener('pointermove', (e) => {
+            if (!isDrawing) return;
+            let pos = getPos(e);
+
+            if (currentMode === 'select') {
+                if (activeSelectTarget === 'image') {
+                    currentOffsetX += pos.x - dragStartPos.x;
+                    currentOffsetY += pos.y - dragStartPos.y;
+                    dragStartPos = pos;
+                    applyImageTransform({ history: false, persist: false });
+                    scheduleTransformCommit();
+                } else if (activeSelectTarget === 'vignette') {
+                    if (activeHandle === 'rotate') {
+                        shape.rotation = Math.atan2(pos.y - shape.cy, pos.x - shape.cx) + Math.PI / 2;
+                    } else if (activeHandle === 'move') {
+                        shape.cx += pos.x - dragStartPos.x;
+                        shape.cy += pos.y - dragStartPos.y;
+                    } else {
+                        const dx = pos.x - dragStartPos.x;
+                        const dy = pos.y - dragStartPos.y;
+                        if (activeHandle.includes('e')) shape.rx = Math.max(15, shape.rx + (dx * SENSITIVITY_SCALE) / 2);
+                        if (activeHandle.includes('w')) shape.rx = Math.max(15, shape.rx - (dx * SENSITIVITY_SCALE) / 2);
+                        if (activeHandle.includes('s')) shape.ry = Math.max(15, shape.ry + (dy * SENSITIVITY_SCALE) / 2);
+                        if (activeHandle.includes('n')) shape.ry = Math.max(15, shape.ry - (dy * SENSITIVITY_SCALE) / 2);
+                    }
+                    dragStartPos = pos;
+                    drawGuide();
+                } else if (activeSelectTarget === 'arrow' && selectedArrowIndex !== -1) {
+                    const item = getActiveItem();
+                    if (item && item.arrows[selectedArrowIndex]) {
+                        const arr = item.arrows[selectedArrowIndex];
+                        const dx = pos.x - dragStartPos.x;
+                        const dy = pos.y - dragStartPos.y;
+                        if (activeArrowHandle === 'start') {
+                            arr.start.x += dx; arr.start.y += dy;
+                        } else if (activeArrowHandle === 'end') {
+                            arr.end.x += dx; arr.end.y += dy;
+                        } else if (activeArrowHandle === 'move') {
+                            arr.start.x += dx; arr.start.y += dy;
+                            arr.end.x += dx; arr.end.y += dy;
+                        }
+                        dragStartPos = pos;
+                        refreshMainCanvas();
+                    }
+                }
+                return;
+            }
+
+            if (currentMode === 'mask') {
+                drawBrushStroke(lastStrokePos, pos);
+                lastStrokePos = pos;
+                return;
+            }
+
+            if (currentMode === 'arrow') {
+                isSnappedToParallel = false;
+                let curAngle = Math.atan2(pos.y - dragStartPos.y, pos.x - dragStartPos.x);
+                let dist = Math.hypot(pos.x - dragStartPos.x, pos.y - dragStartPos.y);
+
+                let targetAngles = [0, Math.PI / 2, Math.PI, -Math.PI / 2, -Math.PI];
+                const item = getActiveItem();
+                if (item && item.arrows) {
+                    item.arrows.forEach(a => {
+                        let aAngle = Math.atan2(a.end.y - a.start.y, a.end.x - a.start.x);
+                        targetAngles.push(aAngle, aAngle + Math.PI, aAngle - Math.PI);
+                    });
+                }
+
+                const SNAP_THRESHOLD_RAD = 0.087;
+                for (let targetA of targetAngles) {
+                    let diff = Math.abs(curAngle - targetA);
+                    diff = Math.min(diff, Math.abs(diff - 2 * Math.PI), Math.abs(diff + 2 * Math.PI));
+                    if (diff < SNAP_THRESHOLD_RAD) {
+                        curAngle = targetA;
+                        isSnappedToParallel = true;
+                        pos = {
+                            x: dragStartPos.x + dist * Math.cos(targetA),
+                            y: dragStartPos.y + dist * Math.sin(targetA)
+                        };
+                        break;
+                    }
+                }
+
+                activeTempArrow = { start: dragStartPos, end: pos, color: arrowColor, arrowType: arrowType, lengthMm: '' };
+                refreshMainCanvas();
+                return;
+            }
+
+            if (isEditing && activeHandle && currentMode === 'vignette') {
+                if (activeHandle === 'rotate') {
+                    shape.rotation = Math.atan2(pos.y - shape.cy, pos.x - shape.cx) + Math.PI / 2;
+                } else if (activeHandle === 'move') {
+                    shape.cx += pos.x - dragStartPos.x;
+                    shape.cy += pos.y - dragStartPos.y;
+                } else {
+                    const dx = pos.x - dragStartPos.x;
+                    const dy = pos.y - dragStartPos.y;
+                    if (activeHandle.includes('e')) shape.rx = Math.max(15, shape.rx + (dx * SENSITIVITY_SCALE) / 2);
+                    if (activeHandle.includes('w')) shape.rx = Math.max(15, shape.rx - (dx * SENSITIVITY_SCALE) / 2);
+                    if (activeHandle.includes('s')) shape.ry = Math.max(15, shape.ry + (dy * SENSITIVITY_SCALE) / 2);
+                    if (activeHandle.includes('n')) shape.ry = Math.max(15, shape.ry - (dy * SENSITIVITY_SCALE) / 2);
+                }
+                dragStartPos = pos;
+                drawGuide();
+            } else if (!isEditing) {
+                points.push(pos);
+            }
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (e.button === 2) {
+                hideBeforeCompare();
+            }
+            if (!isDrawing) return;
+            isDrawing = false;
+
+            if (currentMode === 'select') {
+                if (activeSelectTarget === 'arrow') saveToDB();
+                if (activeSelectTarget === 'image') { clearTimeout(transformCommitTimer); syncActiveItemCanvas(true); }
+                activeSelectTarget = null;
+                return;
+            }
+
+            if (currentMode === 'arrow' && activeTempArrow) {
+                isSnappedToParallel = false;
+                const dist = Math.hypot(activeTempArrow.end.x - activeTempArrow.start.x, activeTempArrow.end.y - activeTempArrow.start.y);
+                
+                if (dist > 15) {
+                    const mmInput = prompt("寸法の数値（mm単位）を入力してください:\n※未入力（キャンセル/空欄）の場合は数字を表示しません", "");
+                    if (mmInput && mmInput.trim() !== '') {
+                        activeTempArrow.lengthMm = mmInput.trim();
+                    }
+                    const item = getActiveItem();
+                    if (item) {
+                        if (!item.arrows) item.arrows = [];
+                        item.arrows.push(activeTempArrow);
+                        selectedObjectType = 'arrow';
+                        selectedArrowIndex = item.arrows.length - 1;
+                        saveToDB();
+                    }
+                }
+                activeTempArrow = null;
+                refreshMainCanvas();
+                return;
+            }
+
+            if (currentMode === 'mask' || currentMode === 'select') {
+                syncActiveItemCanvas();
+                return; 
+            }
+
+            const pos = getPos(e);
+            const isClick = pointerDownPos && Math.hypot(pos.x - pointerDownPos.x, pos.y - pointerDownPos.y) < 10;
+
+            if (!isEditing) {
+                if (isClick) {
+                    shape.cx = pos.x; shape.cy = pos.y; shape.rx = 250; shape.ry = 180; shape.rotation = 0;
+                } else if (points.length >= 2) {
+                    const xs = points.map(p => p.x), ys = points.map(p => p.y);
+                    shape.cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+                    shape.cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+                    shape.rx = Math.max((Math.max(...xs) - Math.min(...xs)) / 2, 20);
+                    shape.ry = Math.max((Math.max(...ys) - Math.min(...ys)) / 2, 20);
+                    shape.rotation = 0;
+                }
+                isEditing = true;
+                selectedObjectType = 'vignette';
+                drawGuide();
+            }
+        });
+
+        function drawBrushStroke(start, end) {
+            [baseCtx, ctx].forEach(c => {
+                c.lineWidth = brushSize; c.lineCap = "round"; c.lineJoin = "round";
+                c.strokeStyle = currentColor; c.beginPath();
+                c.moveTo(start.x, start.y); c.lineTo(end.x, end.y); c.stroke();
+            });
+        }
+
+        function drawDarkOverlayForShape(targetCtx, sh) {
+            targetCtx.save();
+            targetCtx.fillStyle = `rgba(0, 0, 0, ${sh.darkness || bgDarkness})`;
+            targetCtx.beginPath();
+            targetCtx.rect(0, 0, 1200, 1200);
+            targetCtx.ellipse(sh.cx, sh.cy, sh.rx, sh.ry, sh.rotation, 0, Math.PI * 2);
+            targetCtx.fill('evenodd');
+            targetCtx.restore();
+        }
+
+        function drawGuide() {
+            refreshMainCanvas();
+            drawDarkOverlayForShape(ctx, { cx: shape.cx, cy: shape.cy, rx: shape.rx, ry: shape.ry, rotation: shape.rotation, darkness: bgDarkness });
+
+            ctx.save();
+            ctx.translate(shape.cx, shape.cy);
+            ctx.rotate(shape.rotation);
+
+            ctx.strokeStyle = "#ff3333"; ctx.lineWidth = 4; ctx.setLineDash([10, 6]);
+            ctx.beginPath(); ctx.ellipse(0, 0, shape.rx, shape.ry, 0, 0, Math.PI * 2); ctx.stroke();
+
+            ctx.setLineDash([]); ctx.strokeStyle = "#ff9800"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(0, -shape.ry); ctx.lineTo(0, -shape.ry - 45); ctx.stroke();
+            ctx.fillStyle = "#ff9800"; ctx.beginPath(); ctx.arc(0, -shape.ry - 45, 12, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#ff3333"; ctx.lineWidth = 3;
+            [
+                { x: -shape.rx, y: -shape.ry }, { x: shape.rx, y: -shape.ry },
+                { x: shape.rx, y: shape.ry }, { x: -shape.rx, y: shape.ry }
+            ].forEach(h => {
+                ctx.beginPath(); ctx.arc(h.x, h.y, 12, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            });
+            ctx.restore();
+        }
+
+        // --- 単一アイテムのBlob生成処理（ファイルサイズ200KB以下自動圧縮制御） ---
+        async function processSingleItemBlob(itemObj) {
+            const outCanvas = document.createElement('canvas');
+            outCanvas.width = 1200; outCanvas.height = 1200;
+            const oCtx = outCanvas.getContext('2d');
+
+            if (itemObj && itemObj.cleanCanvas) {
+                oCtx.drawImage(itemObj.cleanCanvas, 0, 0);
+            } else {
+                oCtx.drawImage(baseCanvas, 0, 0);
+            }
+
+            if (itemObj && itemObj.vignetteShape && itemObj.vignetteShape.applied) {
+                drawDarkOverlayForShape(oCtx, itemObj.vignetteShape);
+            }
+
+            if (itemObj && itemObj.arrows) {
+                itemObj.arrows.forEach(arr => drawSingleArrowObject(oCtx, arr, false));
+            }
+
+            let low = 0.1, high = 0.95, bestBlob = null;
+            const MAX_SIZE = 200 * 1024; // 200KB上限
+
+            for (let i = 0; i < 7; i++) {
+                const mid = (low + high) / 2;
+                const blob = await new Promise(resolve => outCanvas.toBlob(resolve, 'image/jpeg', mid));
+                if (blob.size <= MAX_SIZE) {
+                    bestBlob = blob;
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            if (!bestBlob) {
+                bestBlob = await new Promise(resolve => outCanvas.toBlob(resolve, 'image/jpeg', 0.1));
+            }
+            return bestBlob;
+        }
+
+        async function processCurrentBlob() {
+            const item = getActiveItem();
+            if (isEditing && currentMode === 'vignette') {
+                shape.applied = true;
+            }
+            return await processSingleItemBlob(item);
+        }
+
+        async function downloadSingleItem(item, folderName, index) {
+            if (activeFolderId && activeItemIndex === index) {
+                if (isEditing && currentMode === 'vignette') {
+                    item.vignetteShape = { cx: shape.cx, cy: shape.cy, rx: shape.rx, ry: shape.ry, rotation: shape.rotation, darkness: bgDarkness, applied: true };
+                    isEditing = false;
+                }
+            }
+            const blob = await processCurrentBlob();
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${item.customName}.jpg`;
+            link.click();
+        }
+
+        downloadSingleBtn.addEventListener('click', () => {
+            const folder = getActiveFolder();
+            if (activeItemIndex !== -1 && folder.items[activeItemIndex]) {
+                downloadSingleItem(folder.items[activeItemIndex], folder.name, activeItemIndex);
+            }
+        });
+
+        function downloadFolderItems(folder) {
+            folder.items.forEach((item, i) => {
+                if (item.processedBlob) {
+                    setTimeout(() => {
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(item.processedBlob);
+                        link.download = `${item.customName}.jpg`;
+                        link.click();
+                    }, i * 250);
+                }
+            });
+        }
+
+        async function downloadAllAsZip() {
+            if (typeof JSZip === 'undefined') {
+                alert("ZIPライブラリの読み込みに失敗しました。インターネット接続を確認してください。");
+                return;
+            }
+
+            const zip = new JSZip();
+            let count = 0;
+
+            folders.forEach(folder => {
+                let folderCleanName = folder.name.replace(/^[^\w\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+/u, '').trim();
+                if (!folderCleanName) folderCleanName = folder.name;
+                
+                let zipFolder = zip.folder(folderCleanName);
+                folder.items.forEach(item => {
+                    if (item.isDone && item.processedBlob) {
+                        zipFolder.file(`${item.customName}.jpg`, item.processedBlob);
+                        count++;
+                    }
+                });
+            });
+
+            if (count === 0) {
+                alert("書き出し可能な完了済み画像がありません。");
+                return;
+            }
+
+            status.innerText = `ZIP圧縮中... (${count} 件の画像を200KB以下で包んでいます)`;
+            const content = await zip.generateAsync({ type: "blob" });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            const dateStr = new Date().toISOString().slice(0,10);
+            link.download = `検品画像一括_${dateStr}.zip`;
+            link.click();
+            status.innerText = `ZIPファイルのダウンロードを開始しました！ (${count} 件)`;
+        }
+
+        downloadZipBtn.addEventListener('click', downloadAllAsZip);
+
+        // ============================================================
+        //  保存先フォルダ（パソコンのドライブ）連携
+        //  File System Access API は https でのみ動作する。
+        //  file:// でHTMLを直接開いた場合はブラウザ側が機能を提供しないため、
+        //  その旨を画面に明示して「ZIP一括DL」へ誘導する。
+        // ============================================================
+        const DRIVE_KEY = 'drive_handle';
+        const connectDriveBtn = document.getElementById('connectDriveBtn');
+        const importDriveBtn = document.getElementById('importDriveBtn');
+        const disconnectDriveBtn = document.getElementById('disconnectDriveBtn');
+        const exportDriveBtn = document.getElementById('exportDriveBtn');
+        const driveStatus = document.getElementById('driveStatus');
+        const driveUnsupported = document.getElementById('driveUnsupported');
+
+        let driveHandle = null;
+
+        function driveSupported() {
+            return typeof window.showDirectoryPicker === 'function';
+        }
+
+        function driveUnsupportedReason() {
+            if (location.protocol === 'file:') {
+                return "この機能は、HTMLファイルを直接ダブルクリックで開いた状態では使えません（ブラウザのセキュリティ制限）。<br>"
+                     + "サーバー上（https）に置いたアプリから開くと利用できるようになります。<br>"
+                     + "それまでは「📦 ZIP一括DL」で書き出してください。";
+            }
+            return "お使いのブラウザはこの機能に対応していません。<br>"
+                 + "Chrome または Edge の最新版（パソコン版）でお試しください。iPhone / iPad の Safari は非対応です。<br>"
+                 + "「📦 ZIP一括DL」は引き続きご利用いただけます。";
+        }
+
+        // Windows のファイル名に使えない文字を除去する
+        function sanitizeName(name) {
+            return (name || '')
+                .replace(/^[^\w぀-ヿ㐀-䶿一-鿿]+/u, '')
+                .replace(/[\\\/:*?"<>|]/g, '_')
+                .trim() || '無題';
+        }
+
+        function updateDriveUI() {
+            if (!driveSupported()) {
+                driveUnsupported.style.display = 'block';
+                driveUnsupported.innerHTML = driveUnsupportedReason();
+                connectDriveBtn.disabled = true;
+                importDriveBtn.disabled = true;
+                disconnectDriveBtn.disabled = true;
+                driveStatus.innerText = "利用できません";
+                exportDriveBtn.style.display = 'none';
+                return;
+            }
+            driveUnsupported.style.display = 'none';
+            connectDriveBtn.disabled = false;
+            importDriveBtn.disabled = !driveHandle;
+            disconnectDriveBtn.disabled = !driveHandle;
+
+            if (driveHandle) {
+                driveStatus.innerHTML = `接続中: <strong style="color:#00e676;">📂 ${driveHandle.name}</strong>`;
+                connectDriveBtn.innerText = '📂 別のフォルダに変更';
+                exportDriveBtn.style.display = 'inline-block';
+            } else {
+                driveStatus.innerText = "未接続";
+                connectDriveBtn.innerText = '📂 保存先フォルダを選ぶ';
+                exportDriveBtn.style.display = 'none';
+            }
+        }
+
+        function storeDriveHandle(handle) {
+            if (!db) return;
+            try {
+                const tx = db.transaction(DB_STORE, "readwrite");
+                tx.objectStore(DB_STORE).put({ id: DRIVE_KEY, handle: handle });
+            } catch (e) { console.warn("フォルダ接続情報の保存に失敗:", e); }
+        }
+
+        function restoreDriveHandle() {
+            if (!db || !driveSupported()) { updateDriveUI(); return; }
+            try {
+                const req = db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get(DRIVE_KEY);
+                req.onsuccess = () => {
+                    if (req.result && req.result.handle) driveHandle = req.result.handle;
+                    updateDriveUI();
+                };
+                req.onerror = () => updateDriveUI();
+            } catch (e) { updateDriveUI(); }
+        }
+
+        // 権限は再訪問時に切れるので、操作の直前に必ず確認する
+        async function ensureDrivePermission(mode) {
+            if (!driveHandle) return false;
+            const opts = { mode: mode || 'readwrite' };
+            try {
+                if (await driveHandle.queryPermission(opts) === 'granted') return true;
+                return (await driveHandle.requestPermission(opts)) === 'granted';
+            } catch (e) {
+                console.warn("権限確認に失敗:", e);
+                return false;
+            }
+        }
+
+        connectDriveBtn.addEventListener('click', async () => {
+            if (!driveSupported()) { alert(driveUnsupportedReason().replace(/<br>/g, '\n')); return; }
+            try {
+                const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                driveHandle = handle;
+                storeDriveHandle(handle);
+                updateDriveUI();
+                status.innerText = `保存先フォルダ「${handle.name}」に接続しました。`;
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    console.error(e);
+                    alert("フォルダの接続に失敗しました。\n" + (e.message || e));
+                }
+            }
+        });
+
+        disconnectDriveBtn.addEventListener('click', () => {
+            driveHandle = null;
+            if (db) {
+                try { db.transaction(DB_STORE, "readwrite").objectStore(DB_STORE).delete(DRIVE_KEY); } catch (e) {}
+            }
+            updateDriveUI();
+            status.innerText = "保存先フォルダの接続を解除しました。";
+        });
+
+        // --- フォルダ内の写真をまとめて読み込む（サブフォルダも再帰） ---
+        importDriveBtn.addEventListener('click', async () => {
+            if (!driveHandle) { alert("先に保存先フォルダを選んでください。"); return; }
+            if (!await ensureDrivePermission('read')) {
+                alert("フォルダを読み取る許可が必要です。ブラウザの確認ダイアログで「許可」を選んでください。");
+                return;
+            }
+
+            status.innerText = `📂 ${driveHandle.name} を検索中...`;
+            const files = [];
+            try {
+                await (async function walk(dir, depth) {
+                    if (depth > 6) return;
+                    for await (const entry of dir.values()) {
+                        if (entry.kind === 'file') {
+                            const f = await entry.getFile();
+                            if (isImageFile(f)) files.push(f);
+                        } else if (entry.kind === 'directory') {
+                            await walk(entry, depth + 1);
+                        }
+                    }
+                })(driveHandle, 0);
+            } catch (e) {
+                console.error(e);
+                alert("フォルダの読み取り中にエラーが発生しました。\n" + (e.message || e));
+                status.innerText = "フォルダの読み取りに失敗しました。";
+                return;
+            }
+
+            if (files.length === 0) {
+                alert(`「${driveHandle.name}」の中に画像ファイルが見つかりませんでした。`);
+                status.innerText = "画像が見つかりませんでした。";
+                return;
+            }
+
+            configModal.style.display = 'none';
+            handleFiles(files, driveHandle.name);
+        });
+
+        // --- 確定済みの写真をフォルダへ直接書き出す ---
+        exportDriveBtn.addEventListener('click', async () => {
+            if (!driveHandle) { alert("先に「⚙️ システム設定」から保存先フォルダを選んでください。"); return; }
+            if (!await ensureDrivePermission('readwrite')) {
+                alert("フォルダへ書き込む許可が必要です。ブラウザの確認ダイアログで「許可」を選んでください。");
+                return;
+            }
+
+            const targets = [];
+            folders.forEach(folder => {
+                folder.items.forEach(item => {
+                    if (item.isDone && item.processedBlob) targets.push({ folder, item });
+                });
+            });
+
+            if (targets.length === 0) {
+                alert("書き出せる完了済みの写真がありません。\n写真を「確定して完了へ」で確定してからお試しください。");
+                return;
+            }
+
+            status.innerText = `📂 ${driveHandle.name} へ ${targets.length} 件を書き出し中...`;
+            let done = 0;
+            const failed = [];
+
+            for (const { folder, item } of targets) {
+                try {
+                    const sub = await driveHandle.getDirectoryHandle(sanitizeName(folder.name), { create: true });
+                    const fh = await sub.getFileHandle(`${sanitizeName(item.customName)}.jpg`, { create: true });
+                    const writable = await fh.createWritable();
+                    await writable.write(item.processedBlob);
+                    await writable.close();
+                    done++;
+                } catch (e) {
+                    console.error("書き出し失敗:", item.customName, e);
+                    failed.push(item.customName);
+                }
+            }
+
+            if (failed.length === 0) {
+                status.innerText = `✓ 「${driveHandle.name}」へ ${done} 件を書き出しました。`;
+                alert(`書き出しが完了しました。\n\n保存先: ${driveHandle.name}\n件数: ${done} 件\n\nフォルダごとにサブフォルダを作って保存しています。`);
+            } else {
+                status.innerText = `書き出し完了 ${done} 件 / 失敗 ${failed.length} 件`;
+                alert(`${done} 件を書き出しましたが、${failed.length} 件が失敗しました。\n\n【失敗したファイル】\n・${failed.slice(0, 5).join("\n・")}`);
+            }
+        });
+
+        updateDriveUI();
+
+        function triggerSlideToRightAnimation(callback) {
+            const canvasRect = canvas.getBoundingClientRect();
+            const sidebarRect = sidebarDropArea.getBoundingClientRect();
+
+            const flyImg = document.createElement('img');
+            flyImg.className = 'flying-thumbnail';
+            flyImg.src = canvas.toDataURL('image/jpeg', 0.85);
+
+            flyImg.style.left = `${canvasRect.left}px`;
+            flyImg.style.top = `${canvasRect.top}px`;
+            flyImg.style.width = `${canvasRect.width}px`;
+            flyImg.style.height = `${canvasRect.height}px`;
+
+            document.body.appendChild(flyImg);
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    flyImg.style.left = `${sidebarRect.left + 20}px`;
+                    flyImg.style.top = `${sidebarRect.top + 60}px`;
+                    flyImg.style.width = '60px';
+                    flyImg.style.height = '60px';
+                    flyImg.style.opacity = '0.3';
+                });
+            });
+
+            setTimeout(() => {
+                flyImg.remove();
+                if (callback) callback();
+            }, 450);
+        }
+
+        async function confirmAndNext() {
+            const folder = getActiveFolder();
+            if (activeItemIndex === -1 || folder.items.length === 0) return;
+
+            saveState();
+
+            if (isEditing && currentMode === 'vignette') {
+                folder.items[activeItemIndex].vignetteShape = {
+                    cx: shape.cx,
+                    cy: shape.cy,
+                    rx: shape.rx,
+                    ry: shape.ry,
+                    rotation: shape.rotation,
+                    darkness: bgDarkness,
+                    applied: true
+                };
+                syncActiveItemCanvas();
+                isEditing = false;
+            }
+
+            const bestBlob = await processCurrentBlob();
+
+            folder.items[activeItemIndex].processedBlob = bestBlob;
+            folder.items[activeItemIndex].isDone = true;
+
+            saveToDB();
+
+            triggerSlideToRightAnimation(() => {
+                const nextIndex = folder.items.findIndex((item, idx) => idx > activeItemIndex && !item.isDone);
+                if (nextIndex !== -1) {
+                    loadQueueItem(folder.id, nextIndex);
+                } else {
+                    const firstPendingIndex = folder.items.findIndex(item => !item.isDone);
+                    if (firstPendingIndex !== -1) {
+                        loadQueueItem(folder.id, firstPendingIndex);
+                    } else {
+                        renderUI();
+                        status.innerText = `「${folder.name}」の全画像処理が完了しました！「📦 ZIP一括DL」ボタンからダウンロード可能です。`;
+                    }
+                }
+            });
+        }
+
+        function cancelEditing() { refreshMainCanvas(); isEditing = false; }
+
+        confirmBtn.addEventListener('click', confirmAndNext);
+        undoBtn.addEventListener('click', undo);
+    </script>
+</body>
+</html>
