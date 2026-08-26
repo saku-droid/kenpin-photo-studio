@@ -49,136 +49,147 @@
             transition: background 0.3s, color 0.2s;
         }
         
-        /* 画面上部の黒い拡張余白バー */
+        /* ------------------------------------------------------------
+           画面上部のバー
+           黒い帯をやめ、本体の背景に溶け込む細い区切りだけにしている。
+           色はすべてテーマ変数を使い、ライトテーマでも崩れないようにする。
+           ------------------------------------------------------------ */
         .top-header-bar {
             width: 100%;
             max-width: 1600px;
-            height: 42px;
-            background: #000000;
-            border-radius: 8px;
-            padding: 4px 12px;
-            margin-bottom: 6px;
+            min-height: 44px;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--border-sub);
+            border-radius: 0;
+            box-shadow: none;
+            padding: 4px 2px 8px 2px;
+            margin-bottom: 8px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
             box-sizing: border-box;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             flex-shrink: 0;
         }
 
-        .header-left-tools { display: flex; align-items: center; gap: 10px; }
+        .header-left-tools { display: flex; align-items: center; gap: 14px; min-width: 0; }
 
         /* 写真を1枚ずつ行き来する（ブラウザの戻る／進む相当） */
         .photo-nav {
             display: flex;
             align-items: center;
-            gap: 2px;
-            background: #222222;
-            border: 1px solid #444;
-            border-radius: 6px;
-            padding: 3px 4px;
+            gap: 1px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            padding: 0;
         }
         .photo-nav button {
             background: transparent;
-            color: #cccccc;
+            color: var(--text-sub);
             border: none;
-            border-radius: 4px;
-            padding: 4px 9px;
-            font-size: 13px;
+            border-radius: 8px;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            font-size: 12px;
             line-height: 1;
             cursor: pointer;
             transition: background 0.15s, color 0.15s;
         }
-        .photo-nav button:hover:not(:disabled) { background: #007bff; color: #fff; }
-        .photo-nav button:disabled { color: #555555; cursor: default; }
+        .photo-nav button:hover:not(:disabled) { background: var(--bg-control); color: var(--text-main); }
+        .photo-nav button:disabled { opacity: 0.3; cursor: default; }
         #photoNavLabel {
             font-size: 11px;
-            font-family: monospace;
-            color: #888888;
-            min-width: 46px;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-sub);
+            min-width: 44px;
             text-align: center;
             white-space: nowrap;
         }
 
-        /* 画面一番左の大きめセンター対応タブ */
+        /* 拠点の切り替え（セグメント型） */
         .large-center-tabs {
             display: flex;
-            gap: 6px;
-            background: #222222;
-            padding: 3px;
-            border-radius: 6px;
-            border: 1px solid #444;
+            gap: 2px;
+            background: var(--bg-control);
+            padding: 2px;
+            border-radius: 9px;
+            border: none;
         }
 
         .large-center-tab {
             background: transparent;
-            color: #888888;
-            padding: 6px 18px;
-            font-size: 13px;
-            font-weight: bold;
-            border-radius: 4px;
+            color: var(--text-sub);
+            padding: 5px 15px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 7px;
             border: none;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: background 0.15s, color 0.15s;
         }
 
-        .large-center-tab:hover {
-            color: #ffffff;
-            background: #333333;
-        }
+        .large-center-tab:hover { color: var(--text-main); }
 
         .large-center-tab.active {
-            background: #007bff;
-            color: #ffffff;
-            box-shadow: 0 2px 6px rgba(0,123,255,0.4);
+            background: var(--bg-panel);
+            color: var(--text-main);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.18);
         }
 
         .header-right-tools {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .ai-status-badge {
-            background: rgba(0, 230, 118, 0.15);
-            color: #00e676;
-            border: 1px solid #00e676;
+            background: transparent;
+            color: #00b060;
+            border: 1px solid var(--border-color);
             font-size: 11px;
-            font-weight: bold;
-            padding: 3px 8px;
-            border-radius: 20px;
+            font-weight: 500;
+            padding: 4px 9px;
+            border-radius: 8px;
             display: inline-flex;
             align-items: center;
             gap: 4px;
         }
+        body:not(.theme-white) .ai-status-badge { color: #00e676; }
 
-        /* 表示中のバージョン。キャッシュで古い版が出ていないかを一目で確認するためのもの */
+        /* 表示中のバージョン。キャッシュで古い版が出ていないかの確認用 */
         #appVersion {
-            font-size: 10px;
-            font-family: monospace;
-            color: #888888;
-            background: #1a1a1a;
-            border: 1px solid #3a3a3a;
-            border-radius: 4px;
-            padding: 3px 7px;
+            font-size: 11px;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-sub);
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 6px;
             cursor: help;
             white-space: nowrap;
+            opacity: 0.65;
+            transition: opacity 0.15s, background 0.15s;
         }
+        #appVersion:hover { opacity: 1; background: var(--bg-control); }
 
         .btn-config-main {
-            background: #ff9800;
-            color: #ffffff;
-            border: none;
-            padding: 6px 12px;
+            background: transparent;
+            color: var(--text-sub);
+            border: 1px solid var(--border-color);
+            padding: 6px 13px;
             font-size: 12px;
-            font-weight: bold;
-            border-radius: 6px;
+            font-weight: 500;
+            border-radius: 8px;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
         }
         .btn-config-main:hover {
-            background: #e08600;
+            background: var(--bg-control);
+            color: var(--text-main);
+            border-color: var(--text-sub);
         }
 
         .app-container {
@@ -320,7 +331,10 @@
 
         /* 横並びモード */
         .work-area.side-strip { flex-direction: row; }
+        /* 右には完了パネルがあるので、未完了は左に置く。
+           左(未完了) → 中央(作業) → 右(完了) と作業が流れるようにする。 */
         .work-area.side-strip > .pending-bar {
+            order: -1;
             width: calc(var(--thumb-size, 100px) + 24px);
             height: auto;
             margin-top: 0;
@@ -435,6 +449,43 @@
         .config-card { background: var(--bg-subpanel); border-radius: 8px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border-sub); }
         .config-group { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
         .config-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+        /* 表示モードのプリセット */
+        .mode-preset-row { display: flex; gap: 8px; }
+        .mode-preset {
+            flex: 1; display: flex; flex-direction: column; gap: 3px;
+            background: var(--bg-panel); color: var(--text-main);
+            border: 1px solid var(--border-color); border-radius: 8px;
+            padding: 10px 12px; text-align: left; cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .mode-preset:hover { border-color: var(--text-sub); }
+        .mode-preset.active { border-color: #007bff; background: rgba(0,123,255,0.10); }
+        .mode-preset strong { font-size: 12px; }
+        .mode-preset span { font-size: 10px; color: var(--text-sub); line-height: 1.4; }
+
+        /* キーボード割り当て */
+        .keymap-list { display: flex; flex-direction: column; gap: 4px; }
+        .keymap-row {
+            display: flex; align-items: center; gap: 8px;
+            padding: 5px 8px; border-radius: 6px; background: var(--bg-panel);
+            border: 1px solid var(--border-sub); font-size: 12px;
+        }
+        .keymap-row .keymap-name { flex: 1; }
+        .keymap-row button {
+            min-width: 118px; font-family: monospace; font-size: 11px;
+            background: var(--bg-control); color: var(--text-main);
+            border: 1px solid var(--border-color); border-radius: 6px;
+            padding: 4px 8px; cursor: pointer;
+        }
+        .keymap-row button:hover { border-color: #007bff; }
+        .keymap-row button.capturing { background: #007bff; color: #fff; border-color: #007bff; }
+        .keymap-row.conflict { border-color: #dc3545; }
+        .keymap-row .keymap-clear {
+            min-width: 0; padding: 4px 7px; background: transparent; border-color: transparent;
+            color: var(--text-sub);
+        }
+        .keymap-row .keymap-clear:hover { color: #dc3545; border-color: transparent; }
 
         #compareBadge { position: absolute; top: 12px; left: 12px; background: rgba(111, 66, 193, 0.9); color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; display: none; pointer-events: none; z-index: 10; }
         #dropOverlay { position: absolute; pointer-events: none; color: var(--text-sub); font-size: 14px; font-weight: bold; text-align: center; z-index: 0; }
@@ -698,27 +749,70 @@
                 <!-- 3. 画面UI表示のカスタマイズ -->
                 <div class="config-card">
                     <h4 style="margin:0 0 8px 0; color:#ff9800;">🚀 3. 画面表示モード・プリセット</h4>
-                    <div style="display:flex; gap:8px; margin-bottom:12px;">
-                        <button id="presetBeginnerBtn" class="btn-secondary" style="background:#007bff; color:#fff; flex:1;">🟢 初心者設定 (フル表示)</button>
-                        <button id="presetExpertBtn" class="btn-secondary" style="background:#28a745; color:#fff; flex:1;">⚡ 慣れた人用お勧め (スッキリ配置)</button>
+                    <p style="font-size:11px; margin:0 0 8px 0; color:var(--text-sub);">
+                        ボタンを隠しても、下の「キーボード操作」に割り当てたキーで同じことができます。
+                    </p>
+                    <div class="mode-preset-row">
+                        <button class="mode-preset" data-preset="beginner">
+                            <strong>初心者</strong>
+                            <span>ボタンをすべて表示。ヒントも出す</span>
+                        </button>
+                        <button class="mode-preset" data-preset="standard">
+                            <strong>標準</strong>
+                            <span>よく使うものだけ表示</span>
+                        </button>
+                        <button class="mode-preset" data-preset="expert">
+                            <strong>エキスパート</strong>
+                            <span>ボタンを最小限に。キーボード中心</span>
+                        </button>
                     </div>
-                    <div class="config-group">
+                    <div class="config-group" style="margin-top:12px;">
+                        <label class="config-item">
+                            <input type="checkbox" id="cfgShowModeButtons" checked>
+                            <span>①〜④のモード切替ボタンを表示する</span>
+                        </label>
                         <label class="config-item">
                             <input type="checkbox" id="cfgShowUndoBtn" checked>
-                            <span>「戻す (Ctrl+Z)」ボタンを表示する</span>
+                            <span>「戻す」ボタンを表示する</span>
                         </label>
                         <label class="config-item">
                             <input type="checkbox" id="cfgShowCompareBtn" checked>
-                            <span>「Before比較 (長押し)」ボタンを表示する（※右クリック長押しでも比較可能）</span>
+                            <span>「Before比較」ボタンを表示する（※右クリック長押しでも比較可能）</span>
+                        </label>
+                        <label class="config-item">
+                            <input type="checkbox" id="cfgShowViewZoom" checked>
+                            <span>「🔍 表示」ズームの操作欄を表示する</span>
+                        </label>
+                        <label class="config-item">
+                            <input type="checkbox" id="cfgShowPhotoNav" checked>
+                            <span>左上の「◀ ▶」写真送りボタンを表示する</span>
+                        </label>
+                        <label class="config-item">
+                            <input type="checkbox" id="cfgShowPendingTools" checked>
+                            <span>未完了バーの「すべて選択」「サイズ」を表示する</span>
                         </label>
                         <label class="config-item">
                             <input type="checkbox" id="cfgCompactDownloadBtn">
-                            <span>「この1枚をDL」のテキストを隠し、マーク（>>>）のみにスッキリ変更する</span>
+                            <span>「この1枚をDL」をマーク（&gt;&gt;&gt;）のみにする</span>
                         </label>
                         <label class="config-item">
                             <input type="checkbox" id="cfgShowGuideHints" checked>
                             <span>操作ヒント・解説テキストを表示する</span>
                         </label>
+                    </div>
+                </div>
+
+                <!-- 5. キーボード操作 -->
+                <div class="config-card">
+                    <h4 style="margin:0 0 8px 0; color:#9c6ade;">⌨️ 5. キーボード操作（カスタムキー）</h4>
+                    <p style="font-size:11px; margin:0 0 10px 0; color:var(--text-sub);">
+                        変更したい行の右のボタンを押してから、割り当てたいキーを押してください。<br>
+                        Ctrl / Shift / Alt との組み合わせも使えます。
+                    </p>
+                    <div id="keymapList" class="keymap-list"></div>
+                    <div style="display:flex; gap:8px; margin-top:10px;">
+                        <button id="resetKeymapBtn" class="btn-secondary" style="font-size:11px;">既定のキーに戻す</button>
+                        <span id="keymapHint" style="font-size:11px; color:var(--text-sub); align-self:center;"></span>
                     </div>
                 </div>
             </div>
@@ -731,8 +825,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.9.2-beta';
-        const APP_BUILD = '20260826-1620';
+        const APP_VERSION = '0.9.3-beta';
+        const APP_BUILD = '20260826-1715';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -814,8 +908,6 @@
         const cfgAutoAiAnalyze = document.getElementById('cfgAutoAiAnalyze');
         const cfgAutoExportOnConfirm = document.getElementById('cfgAutoExportOnConfirm');
         const aiStatusBadge = document.getElementById('aiStatusBadge');
-        const presetBeginnerBtn = document.getElementById('presetBeginnerBtn');
-        const presetExpertBtn = document.getElementById('presetExpertBtn');
         const cfgShowUndoBtn = document.getElementById('cfgShowUndoBtn');
         const cfgShowCompareBtn = document.getElementById('cfgShowCompareBtn');
         const cfgCompactDownloadBtn = document.getElementById('cfgCompactDownloadBtn');
@@ -833,7 +925,13 @@
             sidebarWidth: 360,
             pendingCollapsed: false,
             thumbSize: 100,
-            autoExportOnConfirm: true
+            autoExportOnConfirm: true,
+            showModeButtons: true,
+            showViewZoom: true,
+            showPhotoNav: true,
+            showPendingTools: true,
+            displayPreset: 'beginner',
+            keymap: {}
         };
 
         let selectedPendingKeys = new Set();
@@ -860,9 +958,32 @@
             cfgAutoExportOnConfirm.checked = uiConfig.autoExportOnConfirm !== false;
             geminiApiKeyInput.value = uiConfig.geminiApiKey || '';
 
+            // --- 表示モード（ボタンを出すか隠すか）---
+            const show = (el, on, disp) => { if (el) el.style.display = on ? (disp || 'inline-block') : 'none'; };
+            const on = (k, dflt) => (uiConfig[k] === undefined ? dflt : !!uiConfig[k]);
+
+            const cbModes = document.getElementById('cfgShowModeButtons');
+            const cbZoom = document.getElementById('cfgShowViewZoom');
+            const cbNav = document.getElementById('cfgShowPhotoNav');
+            const cbPend = document.getElementById('cfgShowPendingTools');
+            if (cbModes) cbModes.checked = on('showModeButtons', true);
+            if (cbZoom) cbZoom.checked = on('showViewZoom', true);
+            if (cbNav) cbNav.checked = on('showPhotoNav', true);
+            if (cbPend) cbPend.checked = on('showPendingTools', true);
+
+            show(document.querySelector('.mode-selector'), on('showModeButtons', true), 'flex');
+            show(document.getElementById('viewZoomTools'), on('showViewZoom', true), 'flex');
+            show(document.querySelector('.photo-nav'), on('showPhotoNav', true), 'flex');
+            show(document.getElementById('selectAllPendingBtn'), on('showPendingTools', true));
+            show(document.getElementById('thumbSizeSelect'), on('showPendingTools', true));
+
+            document.querySelectorAll('.mode-preset').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-preset') === uiConfig.displayPreset);
+            });
+
             undoBtn.style.display = uiConfig.showUndoBtn ? 'inline-block' : 'none';
             compareBtn.style.display = uiConfig.showCompareBtn ? 'inline-block' : 'none';
-            
+
             if (uiConfig.compactDownloadBtn) {
                 dlBtnText.style.display = 'none';
                 downloadSingleBtn.style.padding = '5px 8px';
@@ -1030,7 +1151,7 @@
             pendingToggleBtn.innerText = '▸';
         }
 
-        openConfigBtn.addEventListener('click', () => configModal.style.display = 'flex');
+        openConfigBtn.addEventListener('click', () => { renderKeymapUI(); configModal.style.display = 'flex'; });
         closeConfigBtn.addEventListener('click', () => configModal.style.display = 'none');
 
         saveApiKeyBtn.addEventListener('click', () => {
@@ -1065,24 +1186,129 @@
             });
         });
 
-        presetBeginnerBtn.addEventListener('click', () => {
-            uiConfig = { ...uiConfig, showUndoBtn: true, showCompareBtn: true, compactDownloadBtn: false, showGuideHints: true };
-            saveConfig();
+        // --- 表示モードのプリセット ---
+        const DISPLAY_PRESETS = {
+            beginner: { showModeButtons: true,  showUndoBtn: true,  showCompareBtn: true,  showViewZoom: true,  showPhotoNav: true,  showPendingTools: true,  compactDownloadBtn: false, showGuideHints: true },
+            standard: { showModeButtons: true,  showUndoBtn: true,  showCompareBtn: false, showViewZoom: true,  showPhotoNav: true,  showPendingTools: true,  compactDownloadBtn: true,  showGuideHints: false },
+            expert:   { showModeButtons: false, showUndoBtn: false, showCompareBtn: false, showViewZoom: false, showPhotoNav: false, showPendingTools: false, compactDownloadBtn: true,  showGuideHints: false }
+        };
+
+        document.querySelectorAll('.mode-preset').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const name = btn.getAttribute('data-preset');
+                uiConfig = { ...uiConfig, ...DISPLAY_PRESETS[name], displayPreset: name };
+                saveConfig();
+                status.innerText = name === 'expert'
+                    ? "エキスパート表示にしました。隠れた操作はキーボードから行えます（⚙️設定の「キーボード操作」を参照）。"
+                    : `表示モードを「${btn.querySelector('strong').innerText}」にしました。`;
+            });
         });
 
-        presetExpertBtn.addEventListener('click', () => {
-            uiConfig = { ...uiConfig, showUndoBtn: false, showCompareBtn: false, compactDownloadBtn: true, showGuideHints: false };
-            saveConfig();
-        });
+        const DISPLAY_TOGGLES = [
+            ['cfgShowModeButtons', 'showModeButtons'],
+            ['cfgShowUndoBtn', 'showUndoBtn'],
+            ['cfgShowCompareBtn', 'showCompareBtn'],
+            ['cfgShowViewZoom', 'showViewZoom'],
+            ['cfgShowPhotoNav', 'showPhotoNav'],
+            ['cfgShowPendingTools', 'showPendingTools'],
+            ['cfgCompactDownloadBtn', 'compactDownloadBtn'],
+            ['cfgShowGuideHints', 'showGuideHints']
+        ];
 
-        [cfgShowUndoBtn, cfgShowCompareBtn, cfgCompactDownloadBtn, cfgShowGuideHints].forEach(input => {
-            input.addEventListener('change', () => {
-                uiConfig.showUndoBtn = cfgShowUndoBtn.checked;
-                uiConfig.showCompareBtn = cfgShowCompareBtn.checked;
-                uiConfig.compactDownloadBtn = cfgCompactDownloadBtn.checked;
-                uiConfig.showGuideHints = cfgShowGuideHints.checked;
+        DISPLAY_TOGGLES.forEach(([elId, key]) => {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            el.addEventListener('change', () => {
+                uiConfig[key] = el.checked;
+                uiConfig.displayPreset = 'custom';   // 個別に触ったらプリセット選択を外す
                 saveConfig();
             });
+        });
+
+        // ============================================================
+        //  キー割り当ての設定画面
+        // ============================================================
+        const keymapList = document.getElementById('keymapList');
+        const keymapHint = document.getElementById('keymapHint');
+        const resetKeymapBtn = document.getElementById('resetKeymapBtn');
+        let keyCaptureTarget = null;
+
+        function renderKeymapUI() {
+            const map = getKeymap();
+            const counts = {};
+            Object.values(map).forEach(v => { if (v) counts[v] = (counts[v] || 0) + 1; });
+
+            keymapList.innerHTML = '';
+            KEY_ACTIONS.forEach(a => {
+                const row = document.createElement('div');
+                row.className = 'keymap-row' + (map[a.id] && counts[map[a.id]] > 1 ? ' conflict' : '');
+
+                const name = document.createElement('span');
+                name.className = 'keymap-name';
+                name.innerText = a.name;
+
+                const btn = document.createElement('button');
+                btn.innerText = map[a.id] || '（未割り当て）';
+                btn.title = `既定: ${a.def}`;
+                btn.onclick = () => startKeyCapture(a.id, btn);
+
+                const clear = document.createElement('button');
+                clear.className = 'keymap-clear';
+                clear.innerText = '✕';
+                clear.title = 'キーを外す';
+                clear.onclick = () => {
+                    uiConfig.keymap = { ...(uiConfig.keymap || {}), [a.id]: '' };
+                    saveConfig();
+                    renderKeymapUI();
+                };
+
+                row.appendChild(name);
+                row.appendChild(btn);
+                row.appendChild(clear);
+                keymapList.appendChild(row);
+            });
+
+            const dup = Object.keys(counts).filter(k => counts[k] > 1);
+            keymapHint.innerText = dup.length
+                ? `⚠ ${dup.join(' / ')} が重複しています（上の行が優先されます）`
+                : '';
+            keymapHint.style.color = dup.length ? '#ff9800' : 'var(--text-sub)';
+        }
+
+        function startKeyCapture(actionId, btn) {
+            if (keyCaptureTarget) keyCaptureTarget.btn.classList.remove('capturing');
+            keyCaptureTarget = { actionId, btn };
+            btn.classList.add('capturing');
+            btn.innerText = 'キーを押してください…';
+        }
+
+        // 割り当て中は capture 段階で拾い、通常の処理へ流さない
+        window.addEventListener('keydown', (e) => {
+            if (!keyCaptureTarget) return;
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (e.key === 'Escape') {
+                keyCaptureTarget.btn.classList.remove('capturing');
+                keyCaptureTarget = null;
+                renderKeymapUI();
+                return;
+            }
+            const str = keyToString(e);
+            if (!str) return;   // 修飾キー単独は無視
+
+            uiConfig.keymap = { ...(uiConfig.keymap || {}), [keyCaptureTarget.actionId]: str };
+            keyCaptureTarget.btn.classList.remove('capturing');
+            keyCaptureTarget = null;
+            saveConfig();
+            renderKeymapUI();
+        }, true);
+
+        resetKeymapBtn.addEventListener('click', () => {
+            uiConfig.keymap = {};
+            saveConfig();
+            renderKeymapUI();
+            status.innerText = "キー割り当てを既定に戻しました。";
         });
 
         loadConfig();
@@ -2061,13 +2287,7 @@
         prevPhotoBtn.addEventListener('click', () => gotoAdjacentPhoto(-1));
         nextPhotoBtn.addEventListener('click', () => gotoAdjacentPhoto(1));
 
-        window.addEventListener('keydown', (e) => {
-            const t = document.activeElement;
-            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
-            if (e.ctrlKey || e.metaKey || e.altKey) return;
-            if (e.key === 'ArrowLeft') { e.preventDefault(); gotoAdjacentPhoto(-1); }
-            else if (e.key === 'ArrowRight') { e.preventDefault(); gotoAdjacentPhoto(1); }
-        });
+
 
         function renderPendingList() {
             pendingList.innerHTML = '';
@@ -2301,23 +2521,6 @@
                 : "未完了の写真がありません。";
             return n;
         }
-
-        // 未完了リストを触った後の Ctrl+A で全選択する
-        window.addEventListener('keydown', (e) => {
-            const t = document.activeElement;
-            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
-
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
-                if (pendingListFocused || selectedPendingKeys.size > 0) {
-                    e.preventDefault();
-                    selectAllPending();
-                }
-            } else if (e.key === 'Escape' && selectedPendingKeys.size > 0) {
-                selectedPendingKeys.clear();
-                updatePendingSelectionUI();
-                status.innerText = "選択を解除しました。";
-            }
-        });
 
         // 未完了リスト以外を触ったら Ctrl+A の対象から外す
         document.addEventListener('pointerdown', (e) => {
@@ -3059,44 +3262,146 @@
             }
         }
 
+        // ============================================================
+        //  キーボード操作
+        //  ボタンを隠しても操作できるよう、全ての機能をキーに割り当て可能にする。
+        //  以前は3か所に散らばった keydown ハンドラで別々に処理していたため、
+        //  キーを差し替えられず、キー同士の衝突にも気付けなかった。
+        // ============================================================
+        const DELETE_ACTION = () => {
+            const item = getActiveItem();
+
+            // 矢印・楕円枠が選ばれている時は、写真ではなくそれを消す
+            if (selectedObjectType === 'arrow' && item && item.arrows && selectedArrowIndex !== -1 && item.arrows[selectedArrowIndex]) {
+                saveState();
+                item.arrows.splice(selectedArrowIndex, 1);
+                selectedObjectType = null;
+                selectedArrowIndex = -1;
+                saveToDB();
+                refreshMainCanvas();
+                status.innerText = "選択された矢印を削除しました。";
+                return;
+            }
+            if (selectedObjectType === 'vignette') {
+                saveState();
+                if (item) item.vignetteShape = null;
+                isEditing = false;
+                selectedObjectType = null;
+                saveToDB();
+                refreshMainCanvas();
+                status.innerText = "背景暗化（楕円枠）を削除しました。";
+                return;
+            }
+            if (selectedPendingKeys.size > 0) { bulkDeletePendingBtn.click(); return; }
+            if (!isEditing && activeItemIndex !== -1) removeItem(activeFolderId, activeItemIndex);
+        };
+
+        const KEY_ACTIONS = [
+            { id: 'confirm',    name: '確定して完了へ',        def: 'Enter',      run: () => confirmAndNext() },
+            { id: 'bulkConfirm',name: '選択分を一括確定',      def: 'Ctrl+Enter', run: () => bulkConfirmPendingBtn.click() },
+            { id: 'undo',       name: '戻す',                  def: 'Ctrl+Z',     run: () => undo() },
+            { id: 'deleteItem', name: '削除',                  def: 'Delete',     run: DELETE_ACTION },
+            { id: 'prevPhoto',  name: '前の写真へ',            def: 'ArrowLeft',  run: () => gotoAdjacentPhoto(-1) },
+            { id: 'nextPhoto',  name: '次の写真へ',            def: 'ArrowRight', run: () => gotoAdjacentPhoto(1) },
+            { id: 'selectAll',  name: '未完了をすべて選択',    def: 'Ctrl+A',     run: () => { pendingListFocused = true; selectAllPending(); } },
+            { id: 'clearSel',   name: '選択を解除',            def: 'Escape',     run: () => { selectedPendingKeys.clear(); updatePendingSelectionUI(); status.innerText = "選択を解除しました。"; } },
+            { id: 'mode1',      name: '① 選択・移動',          def: '1',          run: () => setMode('select') },
+            { id: 'mode2',      name: '② 背景暗化',            def: '2',          run: () => setMode('vignette') },
+            { id: 'mode3',      name: '③ 名前消し',            def: '3',          run: () => setMode('mask') },
+            { id: 'mode4',      name: '④ 矢印・寸法',          def: '4',          run: () => setMode('arrow') },
+            { id: 'zoomIn',     name: '表示を拡大',            def: '+',          run: () => viewZoomInBtn.click() },
+            { id: 'zoomOut',    name: '表示を縮小',            def: '-',          run: () => viewZoomOutBtn.click() },
+            { id: 'zoomReset',  name: '全体表示に戻す',        def: '0',          run: () => viewZoomResetBtn.click() },
+            { id: 'download',   name: 'この1枚をダウンロード', def: 'Ctrl+S',     run: () => downloadSingleBtn.click() }
+        ];
+
+        // キーを "Ctrl+Shift+X" のような文字列に正規化する
+        function keyToString(e) {
+            if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return '';
+            let k = e.key;
+            if (k === ' ') k = 'Space';
+            else if (k.length === 1) k = k.toUpperCase();
+            const mods = [];
+            if (e.ctrlKey || e.metaKey) mods.push('Ctrl');
+            if (e.shiftKey) mods.push('Shift');
+            if (e.altKey) mods.push('Alt');
+            return mods.concat(k).join('+');
+        }
+
+        // "Ctrl+Shift+X" を分解する。
+        // キー自体が "+" の場合、単純な split('+') では空文字になってしまうため
+        // 末尾の扱いを特別に処理する。
+        function parseBinding(str) {
+            if (!str) return null;
+            let key, modPart;
+            if (str === '+') { key = '+'; modPart = ''; }
+            else if (str.endsWith('++')) { key = '+'; modPart = str.slice(0, -2); }
+            else {
+                const i = str.lastIndexOf('+');
+                if (i === -1) { key = str; modPart = ''; }
+                else { key = str.slice(i + 1); modPart = str.slice(0, i); }
+            }
+            const mods = modPart ? modPart.split('+') : [];
+            return {
+                key: key.length === 1 ? key.toUpperCase() : key,
+                ctrl: mods.some(m => /^(ctrl|cmd|meta)$/i.test(m)),
+                shift: mods.some(m => /^shift$/i.test(m)),
+                alt: mods.some(m => /^alt$/i.test(m))
+            };
+        }
+
+        function normalizeBinding(str) {
+            const b = parseBinding(str);
+            if (!b) return '';
+            const out = [];
+            if (b.ctrl) out.push('Ctrl');
+            if (b.shift) out.push('Shift');
+            if (b.alt) out.push('Alt');
+            return out.concat(b.key).join('+');
+        }
+
+        function bindingMatches(binding, e, pressed) {
+            if (!binding) return false;
+            if (binding === pressed) return true;
+
+            // 「+」「-」などの記号は、キーボード配列によって Shift の有無が変わる。
+            // 修飾キー無しの記号割り当ては、Shift を無視して照合する。
+            const b = parseBinding(binding);
+            if (b && !b.ctrl && !b.alt && b.key.length === 1 && !/[A-Z0-9]/.test(b.key)) {
+                const k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+                return !e.ctrlKey && !e.metaKey && !e.altKey && k === b.key;
+            }
+            return false;
+        }
+
+        function getKeymap() {
+            const map = {};
+            KEY_ACTIONS.forEach(a => {
+                const saved = uiConfig.keymap && uiConfig.keymap[a.id];
+                map[a.id] = (saved === '') ? '' : normalizeBinding(saved || a.def);
+            });
+            return map;
+        }
+
         window.addEventListener('keydown', (e) => {
-            if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+            if (keyCaptureTarget) return;   // キー割り当て中は通常動作させない
+            const t = document.activeElement;
+            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+            if (document.getElementById('dropDiagPanel')) return;
 
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-                e.preventDefault(); undo();
-            } else if (e.key === 'Enter') {
-                confirmAndNext();
-            } else if (e.key === 'Delete' || e.key === 'Backspace') {
-                const item = getActiveItem();
+            const pressed = keyToString(e);
+            if (!pressed) return;
 
-                if (selectedObjectType === 'arrow' && item && item.arrows && selectedArrowIndex !== -1 && item.arrows[selectedArrowIndex]) {
+            const map = getKeymap();
+            for (const a of KEY_ACTIONS) {
+                if (bindingMatches(map[a.id], e, pressed)) {
                     e.preventDefault();
-                    saveState();
-                    item.arrows.splice(selectedArrowIndex, 1);
-                    selectedObjectType = null;
-                    selectedArrowIndex = -1;
-                    saveToDB();
-                    refreshMainCanvas();
-                    status.innerText = "選択された矢印を削除しました。";
+                    a.run();
                     return;
-                }
-
-                if (selectedObjectType === 'vignette') {
-                    e.preventDefault();
-                    saveState();
-                    if (item) item.vignetteShape = null;
-                    isEditing = false;
-                    selectedObjectType = null;
-                    saveToDB();
-                    refreshMainCanvas();
-                    status.innerText = "背景暗化（楕円枠）を削除しました。";
-                    return;
-                }
-
-                if (!isEditing && activeItemIndex !== -1) {
-                    removeItem(activeFolderId, activeItemIndex);
                 }
             }
+            // Backspace は Delete の別名として常に効かせる
+            if (pressed === 'Backspace') { e.preventDefault(); DELETE_ACTION(); }
         });
 
         darknessSlider.addEventListener('input', (e) => {
