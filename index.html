@@ -1000,8 +1000,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.10.0-beta';
-        const APP_BUILD = '20260828-1650';
+        const APP_VERSION = '0.10.1-beta';
+        const APP_BUILD = '20260828-1735';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -2157,16 +2157,13 @@
             return (folder && activeItemIndex !== -1) ? folder.items[activeItemIndex] : null;
         }
 
-        // dim を指定すると、その一辺の正方形として描く。
-        // 書き出し時に 1200 より大きく描き直すために使う（元画像から描くので本当に精細になる）。
-        function renderTransformImageToCanvas(targetCtx, img, angle = 0, scaleFactor = 1.0, offX = 0, offY = 0, dim = 1200) {
-            const k = dim / 1200;
+        function renderTransformImageToCanvas(targetCtx, img, angle = 0, scaleFactor = 1.0, offX = 0, offY = 0) {
             targetCtx.save();
             targetCtx.fillStyle = "#FFFFFF";
-            targetCtx.fillRect(0, 0, dim, dim);
-            targetCtx.translate((600 + (offX || 0)) * k, (600 + (offY || 0)) * k);
+            targetCtx.fillRect(0, 0, 1200, 1200);
+            targetCtx.translate(600 + (offX || 0), 600 + (offY || 0));
             targetCtx.rotate((angle || 0) * Math.PI / 180);
-            const baseScale = (dim / Math.max(img.width, img.height)) * (scaleFactor || 1.0);
+            const baseScale = (1200 / Math.max(img.width, img.height)) * (scaleFactor || 1.0);
             const w = img.width * baseScale;
             const h = img.height * baseScale;
             targetCtx.drawImage(img, -w / 2, -h / 2, w, h);
@@ -2971,10 +2968,8 @@
             updatePendingSelectionUI();
             renderUI();
             saveToDB();
-            const inBand = folders.flatMap(f => f.items)
-                .filter(i => i.editedBlob && i.editedBlob.size >= OUT_MIN_SIZE && i.editedBlob.size <= OUT_MAX_SIZE).length;
             status.innerText = n
-                ? `${n} 件を確定し右パネルへ移動しました（平均 ${formatSize(Math.round(total / n))} / うち ${inBand} 件が150〜200KB）`
+                ? `${n} 件を確定し右パネルへ移動しました（1200x1200 / 平均 ${formatSize(Math.round(total / n))}・すべて200KB以下）`
                     + (exported ? `／📂 ${driveHandle.name} へ ${exported} 件書き出し` : '')
                 : "確定できる写真がありませんでした。";
         });
@@ -5031,117 +5026,75 @@
         //  その場合は出力解像度を上げる。文字消しをしていない写真は元画像
         //  （4000x3000 など）から描き直すため、増えた分だけ本当に精細になる。
         // ============================================================
-        const OUT_MIN_SIZE = 150 * 1024;
-        const OUT_MAX_SIZE = 200 * 1024;
-        const OUT_TARGET = 175 * 1024;      // 帯の真ん中を狙う
-        const OUT_DIM_MIN = 1200;
-        const OUT_DIM_MAX = 3600;
+        // ============================================================
+        //  書き出し画像の生成
+        //  出力サイズは 1200x1200 固定。ここは掲載先の仕様なので変えない。
+        //  その上で、200KB を超えない範囲で最も高い品質を選ぶ。
+        //
+        //  絵柄によって同じ品質でも容量は大きく変わる。
+        //  平坦な写真は最高品質でも 150KB に届かないが、これは
+        //  情報量が少ないだけなので、水増しせずそのまま書き出す。
+        // ============================================================
+        const OUT_MIN_SIZE = 150 * 1024;   // 目安（下回っても書き出しは行う）
+        const OUT_MAX_SIZE = 200 * 1024;   // 上限（必ず守る）
+        const OUT_DIM = 1200;              // 出力サイズ。固定。
 
-        // 指定した一辺で、加工結果（背景暗化・矢印込み）を描いたキャンバスを作る
+        // 加工結果（背景暗化・矢印込み）を描いたキャンバスを作る
         function renderItemToCanvas(itemObj, dim) {
+            const size = OUT_DIM;   // 常に 1200x1200
             const out = document.createElement('canvas');
-            out.width = dim; out.height = dim;
+            out.width = size; out.height = size;
             const o = out.getContext('2d');
-            o.imageSmoothingQuality = 'high';
 
-            const canRedraw = itemObj && itemObj.img && !itemObj.hasMaskEdits;
-            if (dim !== 1200 && canRedraw) {
-                // 元画像から描き直す（拡大しても本当に精細になる）
-                renderTransformImageToCanvas(o, itemObj.img,
-                    itemObj.imageAngle || 0, itemObj.imageScale || 1.0,
-                    itemObj.offsetX || 0, itemObj.offsetY || 0, dim);
-            } else if (itemObj && itemObj.cleanCanvas) {
-                // 文字消し済みは加工後のキャンバスからしか作れない
-                o.drawImage(itemObj.cleanCanvas, 0, 0, dim, dim);
+            if (itemObj && itemObj.cleanCanvas) {
+                o.drawImage(itemObj.cleanCanvas, 0, 0);
             } else {
-                o.drawImage(baseCanvas, 0, 0, dim, dim);
+                o.drawImage(baseCanvas, 0, 0);
             }
 
-            // 楕円枠と矢印は 1200 座標系で持っているので、拡大率をかけて描く
-            o.save();
-            o.scale(dim / 1200, dim / 1200);
             if (itemObj && itemObj.vignetteShape && itemObj.vignetteShape.applied) {
                 drawDarkOverlayForShape(o, itemObj.vignetteShape);
             }
             if (itemObj && itemObj.arrows) {
                 itemObj.arrows.forEach(arr => drawSingleArrowObject(o, arr, false));
             }
-            o.restore();
             return out;
         }
 
         const encodeJpeg = (canv, q) => new Promise(r => canv.toBlob(r, 'image/jpeg', q));
 
-        // 200KB を超えない範囲で最大の品質を探す（5回に制限）
-        async function fitByQuality(canv) {
-            let low = 0.2, high = 1.0, best = null;
-            for (let i = 0; i < 5; i++) {
-                const mid = (low + high) / 2;
-                const b = await encodeJpeg(canv, mid);
-                if (!b) break;
-                if (b.size <= OUT_MAX_SIZE) { best = b; low = mid; } else { high = mid; }
-            }
-            return best;
-        }
-
         async function processSingleItemBlob(itemObj) {
-            // --- ① まず 1200px・最高品質で1回だけ試す ---
-            let dim = 1200;
-            let canv = renderItemToCanvas(itemObj, dim);
-            let blob = await encodeJpeg(canv, 1.0);
-            if (!blob) return null;
+            const canv = renderItemToCanvas(itemObj);
 
-            // 200KB を超えた → 品質を落として収める（この経路なら150KB以上になりやすい）
-            if (blob.size > OUT_MAX_SIZE) {
-                const fit = await fitByQuality(canv);
-                if (fit) { fit.outputDim = dim; return fit; }
-                // 最低品質でも収まらない場合だけ縮小する
-                let scale = 0.8;
-                for (let i = 0; i < 4; i++) {
-                    const small = document.createElement('canvas');
-                    small.width = Math.round(1200 * scale); small.height = small.width;
-                    small.getContext('2d').drawImage(canv, 0, 0, small.width, small.height);
-                    const b = await encodeJpeg(small, 0.7);
-                    if (b && b.size <= OUT_MAX_SIZE) { b.outputDim = small.width; return b; }
-                    scale *= 0.75;
+            // 最高品質で 200KB に収まるなら、それが最良
+            let best = await encodeJpeg(canv, 1.0);
+            if (!best) return null;
+
+            if (best.size > OUT_MAX_SIZE) {
+                // 200KB を超えない範囲で最も高い品質を二分探索する
+                let low = 0.2, high = 1.0, fit = null;
+                for (let i = 0; i < 6; i++) {
+                    const mid = (low + high) / 2;
+                    const b = await encodeJpeg(canv, mid);
+                    if (!b) break;
+                    if (b.size <= OUT_MAX_SIZE) { fit = b; low = mid; } else { high = mid; }
                 }
-                const last = await encodeJpeg(canv, 0.2);
-                if (last) last.outputDim = dim;
-                return last;
-            }
-
-            if (blob.size >= OUT_MIN_SIZE) { blob.outputDim = dim; return blob; }
-
-            // --- ② 150KB に届かない → 必要な解像度を面積比から見積もる ---
-            //     JPEGの大きさはおおよそ画素数に比例するので、一辺は sqrt(倍率) 倍
-            let best = blob, bestDim = dim;
-            for (let attempt = 0; attempt < 3; attempt++) {
-                const ratio = OUT_TARGET / best.size;
-                let next = Math.round(bestDim * Math.sqrt(ratio));
-                next = Math.min(Math.max(next, bestDim + 100), OUT_DIM_MAX);
-                if (next <= bestDim) break;
-
-                canv = renderItemToCanvas(itemObj, next);
-                const b = await encodeJpeg(canv, 1.0);
-                if (!b) break;
-
-                if (b.size > OUT_MAX_SIZE) {
-                    const fit = await fitByQuality(canv);
-                    if (fit && fit.size >= OUT_MIN_SIZE) { fit.outputDim = next; return fit; }
-                    if (fit && fit.size > best.size) { best = fit; bestDim = next; }
-                    break;
+                if (fit) { best = fit; }
+                else {
+                    // 最低品質でも収まらない場合の最終手段
+                    for (const q of [0.15, 0.08, 0.03]) {
+                        const b = await encodeJpeg(canv, q);
+                        if (b && b.size <= OUT_MAX_SIZE) { best = b; break; }
+                        if (b) best = b;
+                    }
                 }
-
-                best = b; bestDim = next;
-                if (b.size >= OUT_MIN_SIZE) break;
-                if (next >= OUT_DIM_MAX) break;
             }
 
             if (best.size < OUT_MIN_SIZE) {
-                console.warn(`最大 ${bestDim}px でも ${Math.round(best.size / 1024)}KB までしか上がりませんでした`
-                    + (itemObj && itemObj.hasMaskEdits ? '（文字消し済みのため元画像から描き直せません）' : '（元画像の情報量が少ない可能性があります）'));
+                console.info('この写真は最高品質でも ' + Math.round(best.size / 1024)
+                    + 'KB です（絵柄が平坦で情報量が少ないため）。1200x1200 のまま書き出します。');
             }
-            best.outputDim = bestDim;
+            best.outputDim = OUT_DIM;
             return best;
         }
 
@@ -5149,7 +5102,7 @@
         function describeSizeBand(blob) {
             if (!blob) return '（⚠ 生成できませんでした）';
             if (blob.size > OUT_MAX_SIZE) return '（⚠ 200KB超）';
-            if (blob.size < OUT_MIN_SIZE) return `（⚠ 150KB未満）`;
+            if (blob.size < OUT_MIN_SIZE) return '（200KB以下 ✓ 絵柄が平坦なため小さめ）';
             return '（150〜200KB ✓）';
         }
 
@@ -5543,7 +5496,7 @@
             const exported = await autoExportOne(folder, confirmedItem);
 
             const sizeText = `${confirmedItem.customName}: ${formatSize(bestBlob ? bestBlob.size : 0)}`
-                + (bestBlob ? ` / ${bestBlob.outputDim || 1200}px` : '')
+                + ' / 1200x1200'
                 + describeSizeBand(bestBlob)
                 + (exported ? ` → 📂 ${exported} へ書き出し` : '');
 
