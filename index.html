@@ -295,6 +295,57 @@
             touch-action: none; 
         }
         .canvas-container.dragover, .sidebar.dragover { border-color: #007bff; background: rgba(0, 123, 255, 0.15); }
+
+        /* ------------------------------------------------------------
+           傾き補正のダイヤル（iPhone の傾き補正と同じ操作感）
+           写真の上に重ねて置くので、写真の表示領域は狭くならない。
+           ------------------------------------------------------------ */
+        .angle-dial {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(460px, 86%);
+            height: 52px;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            background: rgba(18, 18, 18, 0.62);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 12px;
+            z-index: 11;
+            touch-action: none;
+            cursor: ew-resize;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            user-select: none;
+        }
+        .angle-dial.visible { display: flex; }
+        .angle-dial canvas { display: block; width: 100%; height: 34px; }
+        .dial-readout {
+            position: absolute;
+            top: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            color: #ffffff;
+            pointer-events: none;
+        }
+        .dial-readout.off-zero { color: #ffb74d; }
+        /* 中央の指針。ここに来ている目盛りが現在の角度 */
+        .dial-pointer {
+            position: absolute;
+            bottom: 4px;
+            left: 50%;
+            width: 2px;
+            height: 30px;
+            background: #ffb74d;
+            transform: translateX(-50%);
+            border-radius: 1px;
+            pointer-events: none;
+        }
         canvas { touch-action: none; max-width: 100%; max-height: 100%; object-fit: contain; display: block; z-index: 1; }
         
         /* 写真の右真上のダウンロードボタン */
@@ -599,14 +650,10 @@
                     <button id="imageScaleResetBtn" class="btn-secondary" style="padding:2px 6px; font-size:10px;">等倍に戻す</button>
                 </div>
 
-                <!-- iPhone の「傾き補正」と同じ操作感。目盛りを動かして水平を合わせる -->
+                <!-- 90度回転はここ。傾きの微調整は写真の上に重ねたダイヤルで行う -->
                 <div id="rotateTools" class="sub-tools">
-                    <button id="rotateLeft90Btn" class="btn-secondary" title="左に90度回す">↺ 90°</button>
-                    <button id="rotateRight90Btn" class="btn-secondary" title="右に90度回す">↻ 90°</button>
-                    <span title="水平を合わせる微調整。ドラッグで動かせます。">傾き</span>
-                    <input type="range" id="fineAngleSlider" min="-45" max="45" step="0.5" value="0" style="width:130px;">
-                    <span id="fineAngleValue" style="min-width:42px; text-align:center; display:inline-block;">0.0°</span>
-                    <button id="rotateResetBtn" class="btn-secondary" style="font-size:10px; padding:2px 6px;" disabled>戻す</button>
+                    <button id="rotateRight90Btn" class="btn-secondary" title="押すたびに90度ずつ回ります">↻ 90°回転</button>
+                    <button id="rotateResetBtn" class="btn-secondary" style="font-size:10px; padding:2px 6px;" disabled>角度を戻す</button>
                 </div>
 
                 <div id="selectTools" class="sub-tools" style="display: flex;">
@@ -662,6 +709,14 @@
                 </button>
 
                 <canvas id="editorCanvas" width="1200" height="1200"></canvas>
+
+                <!-- 傾き補正のダイヤル。写真の上に重ねるので、表示領域を圧迫しない。
+                     「① 選択・移動」の時だけ出る。 -->
+                <div class="angle-dial" id="angleDialWrap">
+                    <span class="dial-readout" id="fineAngleValue">0.0°</span>
+                    <canvas id="angleDial"></canvas>
+                    <div class="dial-pointer"></div>
+                </div>
             </div>
             
             <div class="pending-bar" id="pendingBarArea">
@@ -910,8 +965,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.9.7-beta';
-        const APP_BUILD = '20260828-1510';
+        const APP_VERSION = '0.9.8-beta';
+        const APP_BUILD = '20260828-1540';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -3814,11 +3869,16 @@
         //  角度は currentImageAngle 1つで持ち、
         //  「90度の倍数」＋「余りの微調整」に分解して画面に出す。
         // ============================================================
-        const rotateLeft90Btn = document.getElementById('rotateLeft90Btn');
         const rotateRight90Btn = document.getElementById('rotateRight90Btn');
-        const fineAngleSlider = document.getElementById('fineAngleSlider');
-        const fineAngleValue = document.getElementById('fineAngleValue');
         const rotateResetBtn = document.getElementById('rotateResetBtn');
+        const angleDialWrap = document.getElementById('angleDialWrap');
+        const angleDial = document.getElementById('angleDial');
+        const fineAngleValue = document.getElementById('fineAngleValue');
+        const dialCtx = angleDial ? angleDial.getContext('2d') : null;
+
+        const DIAL_RANGE = 45;      // 微調整できる範囲（±45度）
+        const DIAL_PX_PER_DEG = 7;  // 1度あたりの目盛り間隔
+        const DIAL_SNAP = 0.7;      // これより0に近ければ0に吸着させる
 
         function normalizeAngle(a) {
             let v = ((a % 360) + 360) % 360;   // 0〜360
@@ -3828,15 +3888,62 @@
         function quarterOf(a) { return Math.round(normalizeAngle(a) / 90) * 90; }
         function fineOf(a) { return +(normalizeAngle(a) - quarterOf(a)).toFixed(1); }
 
-        function updateRotateUI() {
-            if (!fineAngleSlider) return;
+        // 目盛りを描く。中央の指針に来ている目盛りが現在の角度。
+        function drawDial() {
+            if (!dialCtx) return;
+            const cssW = angleDial.clientWidth;
+            const cssH = 34;
+            if (!cssW) return;
+            const dpr = window.devicePixelRatio || 1;
+            if (angleDial.width !== Math.round(cssW * dpr)) {
+                angleDial.width = Math.round(cssW * dpr);
+                angleDial.height = Math.round(cssH * dpr);
+            }
+            const g = dialCtx;
+            g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            g.clearRect(0, 0, cssW, cssH);
+
             const fine = fineOf(currentImageAngle || 0);
-            fineAngleSlider.value = String(fine);
-            fineAngleValue.innerText = (fine > 0 ? '+' : '') + fine.toFixed(1) + '°';
-            const changed = Math.abs(normalizeAngle(currentImageAngle || 0)) > 0.01;
-            fineAngleValue.style.color = changed ? '#ff9800' : '';
-            fineAngleValue.style.fontWeight = changed ? 'bold' : '';
-            rotateResetBtn.disabled = !changed;
+            const cx = cssW / 2;
+
+            for (let d = -DIAL_RANGE; d <= DIAL_RANGE; d++) {
+                const x = cx + (d - fine) * DIAL_PX_PER_DEG;
+                if (x < -12 || x > cssW + 12) continue;
+
+                const major = (d % 10 === 0);
+                const mid = (d % 5 === 0);
+                const h = major ? 15 : (mid ? 10 : 6);
+
+                // 中央から離れるほど薄くして、今どこを見ているか分かりやすくする
+                const fade = Math.max(0.18, 1 - Math.abs(x - cx) / (cssW * 0.55));
+                g.strokeStyle = (d === 0) ? 'rgba(255,183,77,' + fade + ')' : 'rgba(255,255,255,' + (fade * 0.8) + ')';
+                g.lineWidth = (d === 0) ? 2 : 1;
+                g.beginPath();
+                g.moveTo(x, cssH - 4);
+                g.lineTo(x, cssH - 4 - h);
+                g.stroke();
+
+                if (major) {
+                    g.fillStyle = (d === 0) ? 'rgba(255,183,77,' + fade + ')' : 'rgba(255,255,255,' + (fade * 0.75) + ')';
+                    g.font = '9px sans-serif';
+                    g.textAlign = 'center';
+                    g.fillText(String(d), x, cssH - 22);
+                }
+            }
+        }
+
+        function updateRotateUI() {
+            const total = normalizeAngle(currentImageAngle || 0);
+            const fine = fineOf(total);
+            if (fineAngleValue) {
+                fineAngleValue.innerText = (fine > 0 ? '+' : '') + fine.toFixed(1) + '°';
+                fineAngleValue.classList.toggle('off-zero', Math.abs(fine) > 0.01);
+            }
+            if (rotateResetBtn) rotateResetBtn.disabled = Math.abs(total) < 0.01;
+            if (angleDialWrap) {
+                angleDialWrap.classList.toggle('visible', currentMode === 'select' && activeItemIndex !== -1);
+            }
+            drawDial();
         }
 
         function setImageAngle(deg, opts) {
@@ -3846,38 +3953,83 @@
             updateRotateUI();
         }
 
-        if (rotateLeft90Btn) {
-            rotateLeft90Btn.addEventListener('click', () => {
-                setImageAngle((currentImageAngle || 0) - 90);
-                status.innerText = `左に90度回しました（現在 ${normalizeAngle(currentImageAngle).toFixed(1)}°）`;
-            });
+        if (rotateRight90Btn) {
             rotateRight90Btn.addEventListener('click', () => {
+                if (activeItemIndex === -1) { status.innerText = "先に写真を選んでください。"; return; }
                 setImageAngle((currentImageAngle || 0) + 90);
-                status.innerText = `右に90度回しました（現在 ${normalizeAngle(currentImageAngle).toFixed(1)}°）`;
+                status.innerText = '90度回しました（現在 ' + normalizeAngle(currentImageAngle).toFixed(0) + '°）';
             });
             rotateResetBtn.addEventListener('click', () => {
                 setImageAngle(0);
                 status.innerText = "角度を0度に戻しました。";
             });
+        }
 
-            // ドラッグ中は保存せず、離してからまとめて保存する
-            fineAngleSlider.addEventListener('input', (e) => {
+        // --- ダイヤルのドラッグ操作 ---
+        // 指の動きに目盛りが付いてくる。右へ動かすと右に傾く。
+        if (angleDialWrap) {
+            let dialDragging = false;
+            let dialStartX = 0;
+            let dialStartFine = 0;
+
+            angleDialWrap.addEventListener('pointerdown', (e) => {
                 if (activeItemIndex === -1) return;
-                let fine = parseFloat(e.target.value) || 0;
-                if (Math.abs(fine) < 1) fine = 0;   // 0付近は吸着させて水平に戻しやすくする
+                dialDragging = true;
+                dialStartX = e.clientX;
+                dialStartFine = fineOf(currentImageAngle || 0);
+                try { angleDialWrap.setPointerCapture(e.pointerId); } catch (err) {}
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            angleDialWrap.addEventListener('pointermove', (e) => {
+                if (!dialDragging) return;
+                e.preventDefault();
+                e.stopPropagation();
+
+                let fine = dialStartFine + (e.clientX - dialStartX) / DIAL_PX_PER_DEG;
+                fine = Math.max(-DIAL_RANGE, Math.min(DIAL_RANGE, fine));
+                if (Math.abs(fine) < DIAL_SNAP) fine = 0;   // 水平にピタッと戻せるように
+                fine = Math.round(fine * 10) / 10;
+
                 setImageAngle(quarterOf(currentImageAngle || 0) + fine, { history: false, persist: false });
                 scheduleTransformCommit();
-                status.innerText = `傾き ${(fine > 0 ? '+' : '') + fine.toFixed(1)}°（書き出す画像にも反映されます）`;
+                status.innerText = fine === 0
+                    ? "水平（0°）に合いました"
+                    : '傾き ' + (fine > 0 ? '+' : '') + fine.toFixed(1) + '°';
             });
-            fineAngleSlider.addEventListener('change', () => {
+
+            const endDial = (e) => {
+                if (!dialDragging) return;
+                dialDragging = false;
+                try { angleDialWrap.releasePointerCapture(e.pointerId); } catch (err) {}
                 clearTimeout(transformCommitTimer);
                 syncActiveItemCanvas(true);
                 saveToDB();
-            });
-            fineAngleSlider.addEventListener('dblclick', () => {
+            };
+            angleDialWrap.addEventListener('pointerup', endDial);
+            angleDialWrap.addEventListener('pointercancel', endDial);
+
+            // 細かく合わせたい時のためにホイールでも動かせる
+            angleDialWrap.addEventListener('wheel', (e) => {
+                if (activeItemIndex === -1) return;
+                e.preventDefault();
+                e.stopPropagation();
+                let fine = fineOf(currentImageAngle || 0) + (e.deltaY < 0 ? 0.5 : -0.5);
+                fine = Math.max(-DIAL_RANGE, Math.min(DIAL_RANGE, fine));
+                if (Math.abs(fine) < DIAL_SNAP) fine = 0;
+                setImageAngle(quarterOf(currentImageAngle || 0) + fine);
+                status.innerText = '傾き ' + (fine > 0 ? '+' : '') + fine.toFixed(1) + '°';
+            }, { passive: false });
+
+            // ダブルクリックで水平に戻す
+            angleDialWrap.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
                 setImageAngle(quarterOf(currentImageAngle || 0));
-                status.innerText = "傾きを0度に戻しました。";
+                status.innerText = "傾きを0°に戻しました。";
             });
+
+            if (window.ResizeObserver) new ResizeObserver(drawDial).observe(angleDialWrap);
         }
 
         // 「写真そのものの倍率」を常に表示する。
@@ -3941,6 +4093,7 @@
             isEyedropperActive = false;
             isArrowEyedropperActive = false;
             isAutoWidthActive = false;
+            if (typeof updateRotateUI === 'function') updateRotateUI();
 
             modeSelectBtn.classList.toggle('active', mode === 'select');
             modeVignetteBtn.classList.toggle('active', mode === 'vignette');
