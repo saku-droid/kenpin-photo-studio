@@ -429,6 +429,10 @@
         .folder-node.active-folder .folder-header { background: #1e3a5f; color: #00bcd4; border-left: 3px solid #00bcd4; }
         .folder-title { flex: 1; display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .folder-items { padding: 4px 6px; display: flex; flex-direction: column; gap: 4px; background: var(--bg-panel); min-height: 20px; }
+        /* folder.isOpen を false にすると closed クラスが付くが、それを受けるCSSが
+           元から無かったため、フォルダを閉じても中身が隠れなかった。 */
+        .folder-node.closed .folder-items { display: none; }
+        .folder-arrow { display: inline-block; width: 10px; transition: transform 0.15s; }
 
         .queue-item { display: flex; align-items: center; gap: 6px; background: var(--bg-subpanel); padding: 4px; border-radius: 4px; border: 1px solid transparent; cursor: grab; position: relative; font-size: 11px; }
         .queue-item.active { border-color: #007bff; background: #1e3a5f; color: #fff; }
@@ -593,6 +597,16 @@
                     <span title="写真そのものの大きさです。ここを変えると書き出す画像も変わります。">🖼 写真</span>
                     <span id="imageScaleValue" style="min-width:38px; text-align:center; display:inline-block;">100%</span>
                     <button id="imageScaleResetBtn" class="btn-secondary" style="padding:2px 6px; font-size:10px;">等倍に戻す</button>
+                </div>
+
+                <!-- iPhone の「傾き補正」と同じ操作感。目盛りを動かして水平を合わせる -->
+                <div id="rotateTools" class="sub-tools">
+                    <button id="rotateLeft90Btn" class="btn-secondary" title="左に90度回す">↺ 90°</button>
+                    <button id="rotateRight90Btn" class="btn-secondary" title="右に90度回す">↻ 90°</button>
+                    <span title="水平を合わせる微調整。ドラッグで動かせます。">傾き</span>
+                    <input type="range" id="fineAngleSlider" min="-45" max="45" step="0.5" value="0" style="width:130px;">
+                    <span id="fineAngleValue" style="min-width:42px; text-align:center; display:inline-block;">0.0°</span>
+                    <button id="rotateResetBtn" class="btn-secondary" style="font-size:10px; padding:2px 6px;" disabled>戻す</button>
                 </div>
 
                 <div id="selectTools" class="sub-tools" style="display: flex;">
@@ -896,8 +910,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.9.6-beta';
-        const APP_BUILD = '20260828-1445';
+        const APP_VERSION = '0.9.7-beta';
+        const APP_BUILD = '20260828-1510';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -2791,7 +2805,7 @@
                 const header = document.createElement('div');
                 header.className = 'folder-header';
                 header.innerHTML = `
-                    <span class="folder-arrow">▼</span>
+                    <span class="folder-arrow">${folder.isOpen ? '▼' : '▶'}</span>
                     <div class="folder-title">${folder.name} (${doneItems.length})</div>
                 `;
 
@@ -3104,6 +3118,7 @@
             }
 
             updateImageScaleLabel();
+            updateRotateUI();
             renderUI();
             status.innerText = `[${folder.name}] ${activeItemIndex + 1}/${folder.items.length}: ${targetItem.customName}`;
         }
@@ -3667,6 +3682,7 @@
 
             syncActiveItemCanvas(persist);
             updateImageScaleLabel();
+            updateRotateUI();
             if (isEditing && currentMode === 'vignette') drawGuide();
             else refreshMainCanvas();
         }
@@ -3789,6 +3805,79 @@
                 cont.scrollLeft = prevCx * ratio - cont.clientWidth / 2;
                 cont.scrollTop = prevCy * ratio - cont.clientHeight / 2;
             }
+        }
+
+        // ============================================================
+        //  角度調整（iPhone の傾き補正と同じ操作感）
+        //  ・↺↻ で90度ずつ回す
+        //  ・目盛りで ±45度の微調整（水平合わせ）
+        //  角度は currentImageAngle 1つで持ち、
+        //  「90度の倍数」＋「余りの微調整」に分解して画面に出す。
+        // ============================================================
+        const rotateLeft90Btn = document.getElementById('rotateLeft90Btn');
+        const rotateRight90Btn = document.getElementById('rotateRight90Btn');
+        const fineAngleSlider = document.getElementById('fineAngleSlider');
+        const fineAngleValue = document.getElementById('fineAngleValue');
+        const rotateResetBtn = document.getElementById('rotateResetBtn');
+
+        function normalizeAngle(a) {
+            let v = ((a % 360) + 360) % 360;   // 0〜360
+            if (v > 180) v -= 360;             // -180〜180
+            return v;
+        }
+        function quarterOf(a) { return Math.round(normalizeAngle(a) / 90) * 90; }
+        function fineOf(a) { return +(normalizeAngle(a) - quarterOf(a)).toFixed(1); }
+
+        function updateRotateUI() {
+            if (!fineAngleSlider) return;
+            const fine = fineOf(currentImageAngle || 0);
+            fineAngleSlider.value = String(fine);
+            fineAngleValue.innerText = (fine > 0 ? '+' : '') + fine.toFixed(1) + '°';
+            const changed = Math.abs(normalizeAngle(currentImageAngle || 0)) > 0.01;
+            fineAngleValue.style.color = changed ? '#ff9800' : '';
+            fineAngleValue.style.fontWeight = changed ? 'bold' : '';
+            rotateResetBtn.disabled = !changed;
+        }
+
+        function setImageAngle(deg, opts) {
+            if (activeItemIndex === -1) return;
+            currentImageAngle = normalizeAngle(deg);
+            applyImageTransform(opts);
+            updateRotateUI();
+        }
+
+        if (rotateLeft90Btn) {
+            rotateLeft90Btn.addEventListener('click', () => {
+                setImageAngle((currentImageAngle || 0) - 90);
+                status.innerText = `左に90度回しました（現在 ${normalizeAngle(currentImageAngle).toFixed(1)}°）`;
+            });
+            rotateRight90Btn.addEventListener('click', () => {
+                setImageAngle((currentImageAngle || 0) + 90);
+                status.innerText = `右に90度回しました（現在 ${normalizeAngle(currentImageAngle).toFixed(1)}°）`;
+            });
+            rotateResetBtn.addEventListener('click', () => {
+                setImageAngle(0);
+                status.innerText = "角度を0度に戻しました。";
+            });
+
+            // ドラッグ中は保存せず、離してからまとめて保存する
+            fineAngleSlider.addEventListener('input', (e) => {
+                if (activeItemIndex === -1) return;
+                let fine = parseFloat(e.target.value) || 0;
+                if (Math.abs(fine) < 1) fine = 0;   // 0付近は吸着させて水平に戻しやすくする
+                setImageAngle(quarterOf(currentImageAngle || 0) + fine, { history: false, persist: false });
+                scheduleTransformCommit();
+                status.innerText = `傾き ${(fine > 0 ? '+' : '') + fine.toFixed(1)}°（書き出す画像にも反映されます）`;
+            });
+            fineAngleSlider.addEventListener('change', () => {
+                clearTimeout(transformCommitTimer);
+                syncActiveItemCanvas(true);
+                saveToDB();
+            });
+            fineAngleSlider.addEventListener('dblclick', () => {
+                setImageAngle(quarterOf(currentImageAngle || 0));
+                status.innerText = "傾きを0度に戻しました。";
+            });
         }
 
         // 「写真そのものの倍率」を常に表示する。
