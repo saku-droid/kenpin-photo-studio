@@ -1000,8 +1000,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.10.1-beta';
-        const APP_BUILD = '20260828-1735';
+        const APP_VERSION = '0.10.2-beta';
+        const APP_BUILD = '20260828-1810';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1811,6 +1811,8 @@
             );
             if (input === null) return;
 
+            const oldName = item.customName;   // 書き出し済みファイルを差し替えるために控える
+
             item.userName = input.trim();
             updateItemNames();
             renderUI();
@@ -1818,6 +1820,43 @@
             status.innerText = item.userName
                 ? `写真名を「${item.customName}」に変更しました。`
                 : `写真名を自動採番「${item.customName}」に戻しました。`;
+
+            // 保存先フォルダへ既に書き出してある場合、そのファイル名も追従させる
+            renameExportedFile(folder, item, oldName);
+        }
+
+        // 確定済みの写真を改名した時、保存先フォルダのファイルも名前を合わせる。
+        // 画面上の名前だけ変わってフォルダには古い名前のファイルが残る、という
+        // 食い違いを防ぐため。
+        async function renameExportedFile(folder, item, oldName) {
+            if (!driveHandle || !uiConfig.autoExportOnConfirm) return;
+            if (!item || !item.isDone || !item.editedBlob) return;
+
+            const oldFile = sanitizeName(oldName) + '.jpg';
+            const newFile = sanitizeName(item.customName) + '.jpg';
+            if (oldFile === newFile) return;
+
+            try {
+                if (!await ensureDrivePermission('readwrite')) return;
+                const sub = await driveHandle.getDirectoryHandle(sanitizeName(folder.name), { create: true });
+
+                // 新しい名前で書き出す
+                const fh = await sub.getFileHandle(newFile, { create: true });
+                const w = await fh.createWritable();
+                await w.write(item.editedBlob);
+                await w.close();
+
+                // 古い名前のファイルを取り除く（このアプリが作ったものだけ）
+                let removed = false;
+                try { await sub.removeEntry(oldFile); removed = true; } catch (e) {}
+
+                status.innerText = `写真名を「${item.customName}」に変更しました`
+                    + `／📂 ${newFile} へ書き出し`
+                    + (removed ? `（${oldFile} は削除）` : `（${oldFile} は残っています）`);
+            } catch (e) {
+                console.error('書き出し済みファイルの改名に失敗:', e);
+                status.innerText = `写真名を変更しました。ただし保存先フォルダのファイル名は変更できませんでした（${oldFile}）。`;
+            }
         }
 
         // ============================================================
@@ -2159,6 +2198,10 @@
 
         function renderTransformImageToCanvas(targetCtx, img, angle = 0, scaleFactor = 1.0, offX = 0, offY = 0) {
             targetCtx.save();
+            // 4000x3000 の写真を 1200 に落とすので、補間の質が仕上がりを左右する。
+            // 既定は 'low' で細部がつぶれるため 'high' を指定する。
+            targetCtx.imageSmoothingEnabled = true;
+            targetCtx.imageSmoothingQuality = 'high';
             targetCtx.fillStyle = "#FFFFFF";
             targetCtx.fillRect(0, 0, 1200, 1200);
             targetCtx.translate(600 + (offX || 0), 600 + (offY || 0));
@@ -5045,6 +5088,8 @@
             const out = document.createElement('canvas');
             out.width = size; out.height = size;
             const o = out.getContext('2d');
+            o.imageSmoothingEnabled = true;
+            o.imageSmoothingQuality = 'high';
 
             if (itemObj && itemObj.cleanCanvas) {
                 o.drawImage(itemObj.cleanCanvas, 0, 0);
