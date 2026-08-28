@@ -296,6 +296,38 @@
         }
         .canvas-container.dragover, .sidebar.dragover { border-color: #007bff; background: rgba(0, 123, 255, 0.15); }
 
+        /* 表示ズーム中の中心を示す点。拡大して位置を見失わないための目印。 */
+        .view-center-mark {
+            position: absolute;
+            width: 46px;
+            height: 46px;
+            margin-left: -23px;
+            margin-top: -23px;
+            display: none;
+            pointer-events: none;
+            z-index: 12;
+        }
+        .view-center-mark.visible { display: block; }
+        .view-center-mark::before,
+        .view-center-mark::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 183, 77, 0.9);
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+        }
+        /* 横線と縦線（中央だけ空ける） */
+        .view-center-mark::before { left: 0; right: 0; top: 50%; height: 1px; margin-top: -0.5px; }
+        .view-center-mark::after { top: 0; bottom: 0; left: 50%; width: 1px; margin-left: -0.5px; }
+        .view-center-dot {
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 9px; height: 9px;
+            margin-left: -4.5px; margin-top: -4.5px;
+            border-radius: 50%;
+            background: #ffb74d;
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
+        }
+
         /* ------------------------------------------------------------
            傾き補正のダイヤル（iPhone の傾き補正と同じ操作感）
            写真の上に重ねて置くので、写真の表示領域は狭くならない。
@@ -710,6 +742,9 @@
 
                 <canvas id="editorCanvas" width="1200" height="1200"></canvas>
 
+                <!-- 表示ズーム中に「今どこが画面の中心か」を示す目印 -->
+                <div class="view-center-mark" id="viewCenterMark"></div>
+
                 <!-- 傾き補正のダイヤル。写真の上に重ねるので、表示領域を圧迫しない。
                      「① 選択・移動」の時だけ出る。 -->
                 <div class="angle-dial" id="angleDialWrap">
@@ -965,8 +1000,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.9.8-beta';
-        const APP_BUILD = '20260828-1540';
+        const APP_VERSION = '0.9.9-beta';
+        const APP_BUILD = '20260828-1610';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1582,6 +1617,7 @@
         let selectedArrowIndex = -1;
 
         let activeSelectTarget = null; 
+        let scaleDragStart = null;   // 角をつまんだ時の基準
         let activeArrowHandle = null; 
         let dragStartPos = { x: 0, y: 0 };
         let currentMode = 'select';
@@ -3178,6 +3214,72 @@
             status.innerText = `[${folder.name}] ${activeItemIndex + 1}/${folder.items.length}: ${targetItem.customName}`;
         }
 
+        // ============================================================
+        //  写真の四隅をつまんで拡大・縮小する
+        //  つまんだ角と中心の距離の比で倍率を決めるので、
+        //  縦横比は自動的に保たれ、回転していても正しく動く。
+        // ============================================================
+        const CORNER_HIT = 34;      // 角と判定する半径（画像座標）
+        const CORNER_RADIUS = 13;   // 画面に描くつまみの大きさ
+
+        function getImageCenter() {
+            return { x: 600 + (currentOffsetX || 0), y: 600 + (currentOffsetY || 0) };
+        }
+
+        function getImageCorners() {
+            const item = getActiveItem();
+            if (!item || !item.img || !item.img.width) return null;
+            const baseScale = (1200 / Math.max(item.img.width, item.img.height)) * (currentImageScale || 1);
+            const hw = item.img.width * baseScale / 2;
+            const hh = item.img.height * baseScale / 2;
+            const c = getImageCenter();
+            const rad = (currentImageAngle || 0) * Math.PI / 180;
+            const cos = Math.cos(rad), sin = Math.sin(rad);
+            return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([dx, dy]) => ({
+                x: c.x + dx * cos - dy * sin,
+                y: c.y + dx * sin + dy * cos
+            }));
+        }
+
+        function getImageCornerAtPos(pos) {
+            const corners = getImageCorners();
+            if (!corners) return -1;
+            for (let i = 0; i < 4; i++) {
+                if (Math.hypot(pos.x - corners[i].x, pos.y - corners[i].y) < CORNER_HIT) return i;
+            }
+            return -1;
+        }
+
+        // 画面表示にだけ描く（書き出しには含まれない）
+        function drawImageCornerHandles(targetCtx) {
+            if (currentMode !== 'select' || activeItemIndex === -1) return;
+            const corners = getImageCorners();
+            if (!corners) return;
+
+            targetCtx.save();
+            // 角どうしを結ぶ枠
+            targetCtx.strokeStyle = 'rgba(0, 123, 255, 0.55)';
+            targetCtx.lineWidth = 2;
+            targetCtx.setLineDash([8, 6]);
+            targetCtx.beginPath();
+            targetCtx.moveTo(corners[0].x, corners[0].y);
+            for (let i = 1; i < 4; i++) targetCtx.lineTo(corners[i].x, corners[i].y);
+            targetCtx.closePath();
+            targetCtx.stroke();
+            targetCtx.setLineDash([]);
+
+            corners.forEach(pt => {
+                targetCtx.beginPath();
+                targetCtx.arc(pt.x, pt.y, CORNER_RADIUS, 0, Math.PI * 2);
+                targetCtx.fillStyle = '#ffffff';
+                targetCtx.fill();
+                targetCtx.strokeStyle = '#007bff';
+                targetCtx.lineWidth = 3;
+                targetCtx.stroke();
+            });
+            targetCtx.restore();
+        }
+
         function drawGuideLines() {
             if (!showGridCheck.checked) return;
 
@@ -3321,6 +3423,7 @@
             if (currentMode === 'select' || isEditing) {
                 drawGuideLines();
             }
+            drawImageCornerHandles(ctx);
 
             renderAllArrowsOnTop(ctx);
 
@@ -3822,6 +3925,40 @@
         //  拡大時は枠がスクロールできるようになり、ドラッグではなく
         //  スクロールバー／ホイールで見たい場所へ移動できる。
         // ============================================================
+        // --- 表示ズーム中の中心マーク ---
+        // .canvas-container は拡大時にスクロールするため、absolute のままだと
+        // 中身と一緒に流れてしまう。見えている範囲の中心へ毎回置き直す。
+        const viewCenterMark = document.getElementById('viewCenterMark');
+        if (viewCenterMark && !viewCenterMark.querySelector('.view-center-dot')) {
+            const dot = document.createElement('div');
+            dot.className = 'view-center-dot';
+            viewCenterMark.appendChild(dot);
+        }
+
+        function updateOverlayPositions() {
+            const cont = dropArea;
+            if (!cont) return;
+            const cx = cont.scrollLeft + cont.clientWidth / 2;
+            const cy = cont.scrollTop + cont.clientHeight / 2;
+
+            if (viewCenterMark) {
+                const on = (typeof viewZoom !== 'undefined') && viewZoom > 1.001;
+                viewCenterMark.classList.toggle('visible', on);
+                if (on) {
+                    viewCenterMark.style.left = cx + 'px';
+                    viewCenterMark.style.top = cy + 'px';
+                }
+            }
+
+            // 傾きダイヤルも同じ理由で置き直す
+            const dial = document.getElementById('angleDialWrap');
+            if (dial && dial.classList.contains('visible')) {
+                dial.style.left = cx + 'px';
+                dial.style.top = (cont.scrollTop + cont.clientHeight - dial.offsetHeight - 10) + 'px';
+                dial.style.bottom = 'auto';
+            }
+        }
+
         const viewZoomValue = document.getElementById('viewZoomValue');
         const viewZoomInBtn = document.getElementById('viewZoomInBtn');
         const viewZoomOutBtn = document.getElementById('viewZoomOutBtn');
@@ -3860,6 +3997,7 @@
                 cont.scrollLeft = prevCx * ratio - cont.clientWidth / 2;
                 cont.scrollTop = prevCy * ratio - cont.clientHeight / 2;
             }
+            updateOverlayPositions();
         }
 
         // ============================================================
@@ -3943,6 +4081,7 @@
             if (angleDialWrap) {
                 angleDialWrap.classList.toggle('visible', currentMode === 'select' && activeItemIndex !== -1);
             }
+            if (typeof updateOverlayPositions === 'function') updateOverlayPositions();
             drawDial();
         }
 
@@ -4079,6 +4218,7 @@
             status.innerText = "全体表示に戻しました。";
         });
 
+        dropArea.addEventListener('scroll', updateOverlayPositions, { passive: true });
         window.addEventListener('resize', () => applyViewZoom(false));
         if (window.ResizeObserver) new ResizeObserver(() => applyViewZoom(false)).observe(dropArea);
 
@@ -4438,6 +4578,23 @@
                     status.innerText = "背景暗化（楕円枠）を選択中 (Deleteキーで消去可能)";
                     return;
                 }
+                // 写真の角をつまんだら拡大・縮小
+                const cornerIdx = getImageCornerAtPos(pos);
+                if (cornerIdx !== -1) {
+                    const ctr = getImageCenter();
+                    const d0 = Math.hypot(pos.x - ctr.x, pos.y - ctr.y);
+                    if (d0 > 20) {
+                        selectedObjectType = null;
+                        selectedArrowIndex = -1;
+                        activeSelectTarget = 'scale';
+                        scaleDragStart = { dist: d0, scale: currentImageScale || 1 };
+                        isDrawing = true;
+                        saveState();
+                        status.innerText = "角をドラッグして大きさを変えられます（縦横比は保たれます）";
+                        return;
+                    }
+                }
+
                 const item = getActiveItem();
                 const checkShape = (item && item.vignetteShape && item.vignetteShape.applied) ? item.vignetteShape : (isEditing ? shape : null);
                 if (checkShape && isPosInsideShape(pos, checkShape)) {
@@ -4524,7 +4681,17 @@
             let pos = getPos(e);
 
             if (currentMode === 'select') {
-                if (activeSelectTarget === 'image') {
+                if (activeSelectTarget === 'scale') {
+                    const ctr = getImageCenter();
+                    const d = Math.hypot(pos.x - ctr.x, pos.y - ctr.y);
+                    if (scaleDragStart && scaleDragStart.dist > 0) {
+                        const next = scaleDragStart.scale * (d / scaleDragStart.dist);
+                        currentImageScale = Math.min(Math.max(next, MIN_IMAGE_SCALE), MAX_IMAGE_SCALE);
+                        applyImageTransform({ history: false, persist: false });
+                        scheduleTransformCommit();
+                        status.innerText = `写真の大きさ ${Math.round(currentImageScale * 100)}%（縦横比は保たれています）`;
+                    }
+                } else if (activeSelectTarget === 'image') {
                     currentOffsetX += pos.x - dragStartPos.x;
                     currentOffsetY += pos.y - dragStartPos.y;
                     dragStartPos = pos;
@@ -4637,7 +4804,10 @@
 
             if (currentMode === 'select') {
                 if (activeSelectTarget === 'arrow') saveToDB();
-                if (activeSelectTarget === 'image') { clearTimeout(transformCommitTimer); syncActiveItemCanvas(true); }
+                if (activeSelectTarget === 'image' || activeSelectTarget === 'scale') {
+                    clearTimeout(transformCommitTimer); syncActiveItemCanvas(true); saveToDB();
+                }
+                scaleDragStart = null;
                 activeSelectTarget = null;
                 return;
             }
