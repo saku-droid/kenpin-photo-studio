@@ -896,8 +896,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.9.5-beta';
-        const APP_BUILD = '20260826-1830';
+        const APP_VERSION = '0.9.6-beta';
+        const APP_BUILD = '20260828-1445';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1941,13 +1941,16 @@
             return (folder && activeItemIndex !== -1) ? folder.items[activeItemIndex] : null;
         }
 
-        function renderTransformImageToCanvas(targetCtx, img, angle = 0, scaleFactor = 1.0, offX = 0, offY = 0) {
+        // dim を指定すると、その一辺の正方形として描く。
+        // 書き出し時に 1200 より大きく描き直すために使う（元画像から描くので本当に精細になる）。
+        function renderTransformImageToCanvas(targetCtx, img, angle = 0, scaleFactor = 1.0, offX = 0, offY = 0, dim = 1200) {
+            const k = dim / 1200;
             targetCtx.save();
             targetCtx.fillStyle = "#FFFFFF";
-            targetCtx.fillRect(0, 0, 1200, 1200);
-            targetCtx.translate(600 + (offX || 0), 600 + (offY || 0));
+            targetCtx.fillRect(0, 0, dim, dim);
+            targetCtx.translate((600 + (offX || 0)) * k, (600 + (offY || 0)) * k);
             targetCtx.rotate((angle || 0) * Math.PI / 180);
-            const baseScale = (1200 / Math.max(img.width, img.height)) * (scaleFactor || 1.0);
+            const baseScale = (dim / Math.max(img.width, img.height)) * (scaleFactor || 1.0);
             const w = img.width * baseScale;
             const h = img.height * baseScale;
             targetCtx.drawImage(img, -w / 2, -h / 2, w, h);
@@ -2752,8 +2755,10 @@
             updatePendingSelectionUI();
             renderUI();
             saveToDB();
+            const inBand = folders.flatMap(f => f.items)
+                .filter(i => i.editedBlob && i.editedBlob.size >= OUT_MIN_SIZE && i.editedBlob.size <= OUT_MAX_SIZE).length;
             status.innerText = n
-                ? `${n} 件を確定し右パネルへ移動しました（合計 ${formatSize(total)} / 平均 ${formatSize(Math.round(total / n))}・すべて200KB以下）`
+                ? `${n} 件を確定し右パネルへ移動しました（平均 ${formatSize(Math.round(total / n))} / うち ${inBand} 件が150〜200KB）`
                     + (exported ? `／📂 ${driveHandle.name} へ ${exported} 件書き出し` : '')
                 : "確定できる写真がありませんでした。";
         });
@@ -4491,71 +4496,135 @@
             ctx.restore();
         }
 
-        // --- 単一アイテムのBlob生成処理（ファイルサイズ200KB以下自動圧縮制御） ---
-        async function processSingleItemBlob(itemObj) {
-            const outCanvas = document.createElement('canvas');
-            outCanvas.width = 1200; outCanvas.height = 1200;
-            const oCtx = outCanvas.getContext('2d');
+        // ============================================================
+        //  書き出し画像の生成
+        //  目標: 150KB 以上 200KB 以下の JPEG
+        //
+        //  細かい絵柄の写真は 1200px でも簡単に 200KB を超えるので品質を下げれば収まる。
+        //  一方、平坦な写真は最高品質でも 10KB 程度にしかならず 150KB に届かない。
+        //  その場合は出力解像度を上げる。文字消しをしていない写真は元画像
+        //  （4000x3000 など）から描き直すため、増えた分だけ本当に精細になる。
+        // ============================================================
+        const OUT_MIN_SIZE = 150 * 1024;
+        const OUT_MAX_SIZE = 200 * 1024;
+        const OUT_TARGET = 175 * 1024;      // 帯の真ん中を狙う
+        const OUT_DIM_MIN = 1200;
+        const OUT_DIM_MAX = 3600;
 
-            if (itemObj && itemObj.cleanCanvas) {
-                oCtx.drawImage(itemObj.cleanCanvas, 0, 0);
+        // 指定した一辺で、加工結果（背景暗化・矢印込み）を描いたキャンバスを作る
+        function renderItemToCanvas(itemObj, dim) {
+            const out = document.createElement('canvas');
+            out.width = dim; out.height = dim;
+            const o = out.getContext('2d');
+            o.imageSmoothingQuality = 'high';
+
+            const canRedraw = itemObj && itemObj.img && !itemObj.hasMaskEdits;
+            if (dim !== 1200 && canRedraw) {
+                // 元画像から描き直す（拡大しても本当に精細になる）
+                renderTransformImageToCanvas(o, itemObj.img,
+                    itemObj.imageAngle || 0, itemObj.imageScale || 1.0,
+                    itemObj.offsetX || 0, itemObj.offsetY || 0, dim);
+            } else if (itemObj && itemObj.cleanCanvas) {
+                // 文字消し済みは加工後のキャンバスからしか作れない
+                o.drawImage(itemObj.cleanCanvas, 0, 0, dim, dim);
             } else {
-                oCtx.drawImage(baseCanvas, 0, 0);
+                o.drawImage(baseCanvas, 0, 0, dim, dim);
             }
 
+            // 楕円枠と矢印は 1200 座標系で持っているので、拡大率をかけて描く
+            o.save();
+            o.scale(dim / 1200, dim / 1200);
             if (itemObj && itemObj.vignetteShape && itemObj.vignetteShape.applied) {
-                drawDarkOverlayForShape(oCtx, itemObj.vignetteShape);
+                drawDarkOverlayForShape(o, itemObj.vignetteShape);
             }
-
             if (itemObj && itemObj.arrows) {
-                itemObj.arrows.forEach(arr => drawSingleArrowObject(oCtx, arr, false));
+                itemObj.arrows.forEach(arr => drawSingleArrowObject(o, arr, false));
             }
+            o.restore();
+            return out;
+        }
 
-            const MAX_SIZE = 200 * 1024;   // 200KB上限
+        const encodeJpeg = (canv, q) => new Promise(r => canv.toBlob(r, 'image/jpeg', q));
 
-            const encode = (q) => new Promise(resolve => outCanvas.toBlob(resolve, 'image/jpeg', q));
-
-            // まず高品質で1回だけ試す。通常の検品写真はこの時点で 30〜40KB 程度に収まるため、
-            // 大半のケースは 1回のエンコードで終わる（v1 は常に7回まわしていた）。
-            let best = await encode(0.95);
-            if (best && best.size <= MAX_SIZE) return best;
-
-            // 収まらない場合だけ品質を二分探索する
-            let low = 0.1, high = 0.95;
-            best = null;
-            for (let i = 0; i < 6; i++) {
+        // 200KB を超えない範囲で最大の品質を探す（5回に制限）
+        async function fitByQuality(canv) {
+            let low = 0.2, high = 1.0, best = null;
+            for (let i = 0; i < 5; i++) {
                 const mid = (low + high) / 2;
-                const blob = await encode(mid);
-                if (!blob) break;
-                if (blob.size <= MAX_SIZE) { best = blob; low = mid; }
-                else { high = mid; }
+                const b = await encodeJpeg(canv, mid);
+                if (!b) break;
+                if (b.size <= OUT_MAX_SIZE) { best = b; low = mid; } else { high = mid; }
             }
-            if (best) return best;
+            return best;
+        }
 
-            // ここまでで収まらなかった場合の最終手段。
-            // v1 は品質0.1の結果をサイズ未確認のまま返しており、200KB超を返す可能性があった。
-            // 品質を下げ切り、それでも駄目なら縮小して必ず 200KB 以下にする。
-            for (const q of [0.1, 0.05, 0.02]) {
-                const blob = await encode(q);
-                if (blob && blob.size <= MAX_SIZE) return blob;
-            }
+        async function processSingleItemBlob(itemObj) {
+            // --- ① まず 1200px・最高品質で1回だけ試す ---
+            let dim = 1200;
+            let canv = renderItemToCanvas(itemObj, dim);
+            let blob = await encodeJpeg(canv, 1.0);
+            if (!blob) return null;
 
-            let scale = 0.8;
-            for (let i = 0; i < 4; i++) {
-                const small = document.createElement('canvas');
-                small.width = Math.round(1200 * scale);
-                small.height = Math.round(1200 * scale);
-                small.getContext('2d').drawImage(outCanvas, 0, 0, small.width, small.height);
-                const blob = await new Promise(r => small.toBlob(r, 'image/jpeg', 0.6));
-                if (blob && blob.size <= MAX_SIZE) {
-                    console.warn(`200KBに収めるため ${small.width}px へ縮小しました`);
-                    return blob;
+            // 200KB を超えた → 品質を落として収める（この経路なら150KB以上になりやすい）
+            if (blob.size > OUT_MAX_SIZE) {
+                const fit = await fitByQuality(canv);
+                if (fit) { fit.outputDim = dim; return fit; }
+                // 最低品質でも収まらない場合だけ縮小する
+                let scale = 0.8;
+                for (let i = 0; i < 4; i++) {
+                    const small = document.createElement('canvas');
+                    small.width = Math.round(1200 * scale); small.height = small.width;
+                    small.getContext('2d').drawImage(canv, 0, 0, small.width, small.height);
+                    const b = await encodeJpeg(small, 0.7);
+                    if (b && b.size <= OUT_MAX_SIZE) { b.outputDim = small.width; return b; }
+                    scale *= 0.75;
                 }
-                scale *= 0.75;
+                const last = await encodeJpeg(canv, 0.2);
+                if (last) last.outputDim = dim;
+                return last;
             }
 
-            console.error("200KB以下に圧縮できませんでした");
-            return await encode(0.02);
+            if (blob.size >= OUT_MIN_SIZE) { blob.outputDim = dim; return blob; }
+
+            // --- ② 150KB に届かない → 必要な解像度を面積比から見積もる ---
+            //     JPEGの大きさはおおよそ画素数に比例するので、一辺は sqrt(倍率) 倍
+            let best = blob, bestDim = dim;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const ratio = OUT_TARGET / best.size;
+                let next = Math.round(bestDim * Math.sqrt(ratio));
+                next = Math.min(Math.max(next, bestDim + 100), OUT_DIM_MAX);
+                if (next <= bestDim) break;
+
+                canv = renderItemToCanvas(itemObj, next);
+                const b = await encodeJpeg(canv, 1.0);
+                if (!b) break;
+
+                if (b.size > OUT_MAX_SIZE) {
+                    const fit = await fitByQuality(canv);
+                    if (fit && fit.size >= OUT_MIN_SIZE) { fit.outputDim = next; return fit; }
+                    if (fit && fit.size > best.size) { best = fit; bestDim = next; }
+                    break;
+                }
+
+                best = b; bestDim = next;
+                if (b.size >= OUT_MIN_SIZE) break;
+                if (next >= OUT_DIM_MAX) break;
+            }
+
+            if (best.size < OUT_MIN_SIZE) {
+                console.warn(`最大 ${bestDim}px でも ${Math.round(best.size / 1024)}KB までしか上がりませんでした`
+                    + (itemObj && itemObj.hasMaskEdits ? '（文字消し済みのため元画像から描き直せません）' : '（元画像の情報量が少ない可能性があります）'));
+            }
+            best.outputDim = bestDim;
+            return best;
+        }
+
+        // 目標帯（150〜200KB）に入っているかを一言で表す
+        function describeSizeBand(blob) {
+            if (!blob) return '（⚠ 生成できませんでした）';
+            if (blob.size > OUT_MAX_SIZE) return '（⚠ 200KB超）';
+            if (blob.size < OUT_MIN_SIZE) return `（⚠ 150KB未満）`;
+            return '（150〜200KB ✓）';
         }
 
         // 人が読めるサイズ表記
@@ -4948,7 +5017,8 @@
             const exported = await autoExportOne(folder, confirmedItem);
 
             const sizeText = `${confirmedItem.customName}: ${formatSize(bestBlob ? bestBlob.size : 0)}`
-                + (bestBlob && bestBlob.size <= 200 * 1024 ? '（200KB以下 ✓）' : '（⚠ 200KB超）')
+                + (bestBlob ? ` / ${bestBlob.outputDim || 1200}px` : '')
+                + describeSizeBand(bestBlob)
                 + (exported ? ` → 📂 ${exported} へ書き出し` : '');
 
             triggerSlideToRightAnimation(() => {
