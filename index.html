@@ -506,7 +506,11 @@
         .sidebar-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); gap: 4px; }
         .completed-tree { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
         
-        .folder-node { background: var(--bg-subpanel); border-radius: 6px; border: 1px solid var(--border-sub); overflow: hidden; }
+        /* flex-shrink を止めないと、縦フレックスの中で folder-node が縮み、
+           overflow:hidden で中身が切り落とされる。completed-tree 側は
+           はみ出しに気付けないためスクロールバーも出ず、写真に到達できなくなる。 */
+        .folder-node { background: var(--bg-subpanel); border-radius: 6px; border: 1px solid var(--border-sub); overflow: hidden; flex-shrink: 0; }
+        .completed-tree { min-height: 0; }
         .folder-node.drag-over { border-color: #007bff; background: rgba(0, 123, 255, 0.1); }
         .folder-header { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--bg-control); cursor: pointer; font-size: 11px; font-weight: bold; color: var(--text-main); }
         .folder-node.active-folder .folder-header { background: #1e3a5f; color: #00bcd4; border-left: 3px solid #00bcd4; }
@@ -582,6 +586,24 @@
         .mode-preset strong, .pending-pos strong { font-size: 12px; }
         .mode-preset span, .pending-pos span { font-size: 10px; color: var(--text-sub); line-height: 1.4; }
 
+        /* 機能の表示・非表示の一覧 */
+        .feature-toggle-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+            gap: 3px 10px;
+        }
+        .feature-toggle {
+            display: flex; align-items: center; gap: 7px;
+            padding: 5px 8px; border-radius: 6px; font-size: 12px; cursor: pointer;
+        }
+        .feature-toggle:hover { background: var(--bg-control); }
+        .feature-toggle input { cursor: pointer; }
+        .feature-group-title {
+            grid-column: 1 / -1;
+            font-size: 11px; font-weight: bold; color: var(--text-sub);
+            margin-top: 8px; padding-bottom: 2px; border-bottom: 1px solid var(--border-sub);
+        }
+
         /* キーボード割り当て */
         .keymap-list { display: flex; flex-direction: column; gap: 4px; }
         .keymap-row {
@@ -648,8 +670,8 @@
             <div class="controls controls-main">
                 <input type="file" id="upload" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.jfif,.heic,.heif,.tif,.tiff" multiple style="display:none;">
                 <input type="file" id="folderUpload" webkitdirectory directory multiple style="display:none;">
-                <button onclick="document.getElementById('upload').click()" class="btn-secondary">ファイル選択</button>
-                <button onclick="document.getElementById('folderUpload').click()" class="btn-secondary">📁 フォルダ選択</button>
+                <button onclick="document.getElementById('upload').click()" class="btn-secondary file-pick-btn">ファイル選択</button>
+                <button onclick="document.getElementById('folderUpload').click()" class="btn-secondary file-pick-btn">📁 フォルダ選択</button>
 
                 <div class="mode-selector">
                     <button id="modeSelectBtn" class="mode-btn active" style="color:#00bcd4;">① 選択・移動</button>
@@ -759,8 +781,8 @@
                     <span style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
                         <button id="pendingToggleBtn" title="未完了リストの表示・非表示">▾</button>
                         ⏳ 未完了写真: <span id="pendingCount">0</span>件
-                        <button id="selectAllPendingBtn" class="btn-secondary" style="font-size:10px; padding:2px 6px; margin-left:4px;" title="すべて選択（Ctrl+A）">すべて選択</button>
-                        <select id="thumbSizeSelect" title="サムネイルの大きさ" style="font-size:10px; padding:1px 2px;">
+                        <button id="selectAllPendingBtn" class="btn-secondary pending-tool" style="font-size:10px; padding:2px 6px; margin-left:4px;" title="すべて選択（Ctrl+A）">すべて選択</button>
+                        <select id="thumbSizeSelect" class="pending-tool" title="サムネイルの大きさ" style="font-size:10px; padding:1px 2px;">
                             <option value="68">小</option>
                             <option value="100" selected>中</option>
                             <option value="140">大</option>
@@ -941,39 +963,17 @@
                         </div>
                     </div>
 
-                    <div class="config-group" style="margin-top:12px;">
-                        <label class="config-item">
-                            <input type="checkbox" id="cfgShowModeButtons" checked>
-                            <span>①〜④のモード切替ボタンを表示する</span>
-                        </label>
-                        <label class="config-item">
-                            <input type="checkbox" id="cfgShowUndoBtn" checked>
-                            <span>「戻す」ボタンを表示する</span>
-                        </label>
-                        <label class="config-item">
-                            <input type="checkbox" id="cfgShowCompareBtn" checked>
-                            <span>「Before比較」ボタンを表示する（※右クリック長押しでも比較可能）</span>
-                        </label>
-                        <label class="config-item">
-                            <input type="checkbox" id="cfgShowViewZoom" checked>
-                            <span>「🔍 表示」ズームの操作欄を表示する</span>
-                        </label>
-                        <label class="config-item">
-                            <input type="checkbox" id="cfgShowPhotoNav" checked>
-                            <span>左上の「◀ ▶」写真送りボタンを表示する</span>
-                        </label>
-                        <label class="config-item">
-                            <input type="checkbox" id="cfgShowPendingTools" checked>
-                            <span>未完了バーの「すべて選択」「サイズ」を表示する</span>
-                        </label>
-                        <label class="config-item">
-                            <input type="checkbox" id="cfgCompactDownloadBtn">
-                            <span>「この1枚をDL」をマーク（&gt;&gt;&gt;）のみにする</span>
-                        </label>
-                        <label class="config-item">
-                            <input type="checkbox" id="cfgShowGuideHints" checked>
-                            <span>操作ヒント・解説テキストを表示する</span>
-                        </label>
+                    <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border-sub);">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+                            <div style="font-size:12px; font-weight:bold;">機能の表示・非表示</div>
+                            <button id="showAllFeaturesBtn" class="btn-secondary" style="font-size:10px; padding:3px 8px;">すべて表示</button>
+                            <button id="hideAllFeaturesBtn" class="btn-secondary" style="font-size:10px; padding:3px 8px;">最小限にする</button>
+                            <span id="featureCount" style="font-size:11px; color:var(--text-sub);"></span>
+                        </div>
+                        <p style="font-size:11px; margin:0 0 8px 0; color:var(--text-sub);">
+                            隠した機能はキーボードから使えます（「⌨️ キーボード」タブを参照）。
+                        </p>
+                        <div id="featureToggleList" class="feature-toggle-list"></div>
                     </div>
                 </div>
 
@@ -1000,8 +1000,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.9.9-beta';
-        const APP_BUILD = '20260828-1610';
+        const APP_VERSION = '0.10.0-beta';
+        const APP_BUILD = '20260828-1650';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1083,10 +1083,6 @@
         const cfgAutoAiAnalyze = document.getElementById('cfgAutoAiAnalyze');
         const cfgAutoExportOnConfirm = document.getElementById('cfgAutoExportOnConfirm');
         const aiStatusBadge = document.getElementById('aiStatusBadge');
-        const cfgShowUndoBtn = document.getElementById('cfgShowUndoBtn');
-        const cfgShowCompareBtn = document.getElementById('cfgShowCompareBtn');
-        const cfgCompactDownloadBtn = document.getElementById('cfgCompactDownloadBtn');
-        const cfgShowGuideHints = document.getElementById('cfgShowGuideHints');
 
         let uiConfig = {
             showUndoBtn: true,
@@ -1127,50 +1123,16 @@
         }
 
         function applyConfigToUI() {
-            cfgShowUndoBtn.checked = uiConfig.showUndoBtn;
-            cfgShowCompareBtn.checked = uiConfig.showCompareBtn;
-            cfgCompactDownloadBtn.checked = uiConfig.compactDownloadBtn;
-            cfgShowGuideHints.checked = uiConfig.showGuideHints;
             cfgAutoAiAnalyze.checked = uiConfig.autoAiAnalyze !== false;
             cfgAutoExportOnConfirm.checked = uiConfig.autoExportOnConfirm !== false;
             geminiApiKeyInput.value = uiConfig.geminiApiKey || '';
 
-            // --- 表示モード（ボタンを出すか隠すか）---
-            const show = (el, on, disp) => { if (el) el.style.display = on ? (disp || 'inline-block') : 'none'; };
-            const on = (k, dflt) => (uiConfig[k] === undefined ? dflt : !!uiConfig[k]);
-
-            const cbModes = document.getElementById('cfgShowModeButtons');
-            const cbZoom = document.getElementById('cfgShowViewZoom');
-            const cbNav = document.getElementById('cfgShowPhotoNav');
-            const cbPend = document.getElementById('cfgShowPendingTools');
-            if (cbModes) cbModes.checked = on('showModeButtons', true);
-            if (cbZoom) cbZoom.checked = on('showViewZoom', true);
-            if (cbNav) cbNav.checked = on('showPhotoNav', true);
-            if (cbPend) cbPend.checked = on('showPendingTools', true);
-
-            show(document.querySelector('.mode-selector'), on('showModeButtons', true), 'flex');
-            show(document.getElementById('viewZoomTools'), on('showViewZoom', true), 'flex');
-            show(document.querySelector('.photo-nav'), on('showPhotoNav', true), 'flex');
-            show(document.getElementById('selectAllPendingBtn'), on('showPendingTools', true));
-            show(document.getElementById('thumbSizeSelect'), on('showPendingTools', true));
-
+            // --- 機能の表示・非表示 ---
+            applyFeatureVisibility();
             document.querySelectorAll('.mode-preset').forEach(b => {
                 b.classList.toggle('active', b.getAttribute('data-preset') === uiConfig.displayPreset);
             });
-
-            undoBtn.style.display = uiConfig.showUndoBtn ? 'inline-block' : 'none';
-            compareBtn.style.display = uiConfig.showCompareBtn ? 'inline-block' : 'none';
-
-            if (uiConfig.compactDownloadBtn) {
-                dlBtnText.style.display = 'none';
-                downloadSingleBtn.style.padding = '5px 8px';
-            } else {
-                dlBtnText.style.display = 'inline';
-                downloadSingleBtn.style.padding = '5px 9px';
-            }
-
-            pendingHelpText.style.display = uiConfig.showGuideHints ? 'inline' : 'none';
-            status.style.display = uiConfig.showGuideHints ? 'block' : 'none';
+            if (typeof renderFeatureToggles === 'function') renderFeatureToggles();
 
             if (uiConfig.theme === 'white') {
                 document.body.classList.add('theme-white');
@@ -1384,6 +1346,7 @@
 
         openConfigBtn.addEventListener('click', () => {
             renderKeymapUI();
+            renderFeatureToggles();
             showConfigTab('display');
             configModal.style.display = 'flex';
         });
@@ -1423,9 +1386,27 @@
 
         // --- 表示モードのプリセット ---
         const DISPLAY_PRESETS = {
-            beginner: { showModeButtons: true,  showUndoBtn: true,  showCompareBtn: true,  showViewZoom: true,  showPhotoNav: true,  showPendingTools: true,  compactDownloadBtn: false, showGuideHints: true },
-            standard: { showModeButtons: true,  showUndoBtn: true,  showCompareBtn: false, showViewZoom: true,  showPhotoNav: true,  showPendingTools: true,  compactDownloadBtn: true,  showGuideHints: false },
-            expert:   { showModeButtons: false, showUndoBtn: false, showCompareBtn: false, showViewZoom: false, showPhotoNav: false, showPendingTools: false, compactDownloadBtn: true,  showGuideHints: false }
+            beginner: { showPhotoNav:true, showCenterTabs:true, showVersion:true, showFilePick:true,
+                        showModeButtons:true, showCompareBtn:true, showConfirmBtn:true, showUndoBtn:true,
+                        showSubToggle:true, showViewZoom:true, showImageScale:true, showRotateTools:true,
+                        showAngleDial:true, showCornerHandles:true, showCenterMark:true, showDownloadBtn:true,
+                        showPendingBar:true, showPendingTools:true, showPendingToggle:true,
+                        showZipBtn:true, showVaultBtn:true, showAddFolderBtn:true,
+                        compactDownloadBtn:false, showGuideHints:true },
+            standard: { showPhotoNav:true, showCenterTabs:true, showVersion:true, showFilePick:true,
+                        showModeButtons:true, showCompareBtn:false, showConfirmBtn:true, showUndoBtn:true,
+                        showSubToggle:true, showViewZoom:true, showImageScale:true, showRotateTools:true,
+                        showAngleDial:true, showCornerHandles:true, showCenterMark:true, showDownloadBtn:true,
+                        showPendingBar:true, showPendingTools:true, showPendingToggle:true,
+                        showZipBtn:true, showVaultBtn:true, showAddFolderBtn:true,
+                        compactDownloadBtn:true, showGuideHints:false },
+            expert:   { showPhotoNav:false, showCenterTabs:true, showVersion:false, showFilePick:true,
+                        showModeButtons:false, showCompareBtn:false, showConfirmBtn:true, showUndoBtn:false,
+                        showSubToggle:false, showViewZoom:false, showImageScale:false, showRotateTools:false,
+                        showAngleDial:true, showCornerHandles:true, showCenterMark:true, showDownloadBtn:false,
+                        showPendingBar:true, showPendingTools:false, showPendingToggle:false,
+                        showZipBtn:true, showVaultBtn:false, showAddFolderBtn:false,
+                        compactDownloadBtn:true, showGuideHints:false }
         };
 
         document.querySelectorAll('.mode-preset').forEach(btn => {
@@ -1439,26 +1420,156 @@
             });
         });
 
-        const DISPLAY_TOGGLES = [
-            ['cfgShowModeButtons', 'showModeButtons'],
-            ['cfgShowUndoBtn', 'showUndoBtn'],
-            ['cfgShowCompareBtn', 'showCompareBtn'],
-            ['cfgShowViewZoom', 'showViewZoom'],
-            ['cfgShowPhotoNav', 'showPhotoNav'],
-            ['cfgShowPendingTools', 'showPendingTools'],
-            ['cfgCompactDownloadBtn', 'compactDownloadBtn'],
-            ['cfgShowGuideHints', 'showGuideHints']
+        // ============================================================
+        //  機能の表示・非表示
+        //  画面に出ている操作をすべてここで切り替えられるようにする。
+        //  隠してもキーボードからは使えるので、機能自体は失われない。
+        // ============================================================
+        const FEATURE_TOGGLES = [
+            { group: '上のバー' },
+            { key: 'showPhotoNav',     name: '写真送り ◀ ▶',           sel: '.photo-nav',            disp: 'flex' },
+            { key: 'showCenterTabs',   name: '拠点タブ (GU1/2/4)',      sel: '.large-center-tabs',    disp: 'flex' },
+            { key: 'showVersion',      name: 'バージョン表示',           sel: '#appVersion',           disp: 'inline-block' },
+
+            { group: '1段目の操作' },
+            { key: 'showFilePick',     name: 'ファイル選択・フォルダ選択', sel: '.file-pick-btn',       disp: 'inline-block', all: true },
+            { key: 'showModeButtons',  name: '①〜④ モード切替',         sel: '.mode-selector',        disp: 'flex' },
+            { key: 'showCompareBtn',   name: 'Before比較',              sel: '#compareBtn',           disp: 'inline-block' },
+            { key: 'showConfirmBtn',   name: '確定して完了へ',           sel: '#confirmBtn',           disp: 'inline-block' },
+            { key: 'showUndoBtn',      name: '戻す',                    sel: '#undoBtn',              disp: 'inline-block' },
+            { key: 'showSubToggle',    name: '2段目の開閉ボタン ▾',      sel: '#subToolsToggle',       disp: 'inline-block' },
+
+            { group: '2段目の操作' },
+            { key: 'showViewZoom',     name: '🔍 表示ズーム',            sel: '#viewZoomTools',        disp: 'flex' },
+            { key: 'showImageScale',   name: '🖼 写真の倍率',            sel: '#imageScaleTools',      disp: 'flex' },
+            { key: 'showRotateTools',  name: '↻ 90°回転',              sel: '#rotateTools',          disp: 'flex' },
+
+            { group: '写真の上' },
+            { key: 'showAngleDial',    name: '傾きダイヤル',             special: 'angleDial' },
+            { key: 'showCornerHandles',name: '四隅のつまみ（拡大縮小）',  special: 'corner' },
+            { key: 'showCenterMark',   name: '拡大時の中心マーク',        special: 'centerMark' },
+            { key: 'showDownloadBtn',  name: 'この1枚をDL',             sel: '#downloadSingleBtn',    disp: 'flex' },
+
+            { group: '未完了バー' },
+            { key: 'showPendingBar',   name: '未完了バーそのもの',        sel: '#pendingBarArea',       disp: 'flex' },
+            { key: 'showPendingTools', name: 'すべて選択・サイズ変更',    sel: '.pending-tool',         disp: 'inline-block', all: true },
+            { key: 'showPendingToggle',name: '未完了バーの開閉ボタン',    sel: '#pendingToggleBtn',     disp: 'inline-block' },
+
+            { group: '右パネル（完了済み）' },
+            { key: 'showZipBtn',       name: '📦 ZIP一括DL',            sel: '#downloadZipBtn',       disp: 'inline-block' },
+            { key: 'showVaultBtn',     name: '保管庫',                  sel: '#openVaultBtn',         disp: 'inline-block' },
+            { key: 'showAddFolderBtn', name: '＋ フォルダ',             sel: '#addFolderBtn',         disp: 'inline-block' },
+
+            { group: 'その他' },
+            { key: 'compactDownloadBtn', name: 'DLボタンをマークだけにする', invert: true },
+            { key: 'showGuideHints',   name: '操作ヒント・説明文',        special: 'hints' }
         ];
 
-        DISPLAY_TOGGLES.forEach(([elId, key]) => {
-            const el = document.getElementById(elId);
-            if (!el) return;
-            el.addEventListener('change', () => {
-                uiConfig[key] = el.checked;
-                uiConfig.displayPreset = 'custom';   // 個別に触ったらプリセット選択を外す
-                saveConfig();
+        function featureOn(key) {
+            const v = uiConfig[key];
+            return v === undefined ? true : !!v;
+        }
+
+        function applyFeatureVisibility() {
+            FEATURE_TOGGLES.forEach(f => {
+                if (f.group || f.special || f.invert) return;
+                const on = featureOn(f.key);
+                const nodes = f.all ? document.querySelectorAll(f.sel) : [document.querySelector(f.sel)];
+                nodes.forEach(el => { if (el) el.style.display = on ? (f.disp || 'inline-block') : 'none'; });
             });
-        });
+
+            // 個別に扱うもの
+            const dial = document.getElementById('angleDialWrap');
+            if (dial) dial.dataset.allowed = featureOn('showAngleDial') ? '1' : '0';
+            const mark = document.getElementById('viewCenterMark');
+            if (mark) mark.dataset.allowed = featureOn('showCenterMark') ? '1' : '0';
+
+            if (uiConfig.compactDownloadBtn) {
+                dlBtnText.style.display = 'none';
+                downloadSingleBtn.style.padding = '5px 8px';
+            } else {
+                dlBtnText.style.display = 'inline';
+                downloadSingleBtn.style.padding = '5px 9px';
+            }
+
+            const hints = featureOn('showGuideHints');
+            if (pendingHelpText) pendingHelpText.style.display = hints ? 'inline' : 'none';
+            status.style.display = hints ? 'block' : 'none';
+
+            // loadConfig() は変数の初期化より前に走るため、
+            // まだ用意できていない処理は静かに飛ばす（起動後は毎回通る）
+            try {
+                if (typeof updateRotateUI === 'function') updateRotateUI();
+                if (typeof refreshMainCanvas === 'function' && activeItemIndex !== -1) refreshMainCanvas();
+                if (typeof updateWorkAreaLayout === 'function') updateWorkAreaLayout();
+            } catch (e) { /* 起動途中の呼び出しは無視 */ }
+        }
+
+        function renderFeatureToggles() {
+            const list = document.getElementById('featureToggleList');
+            if (!list) return;
+            list.innerHTML = '';
+            let on = 0, total = 0;
+
+            FEATURE_TOGGLES.forEach(f => {
+                if (f.group) {
+                    const h = document.createElement('div');
+                    h.className = 'feature-group-title';
+                    h.innerText = f.group;
+                    list.appendChild(h);
+                    return;
+                }
+                total++;
+                const checked = f.invert ? !!uiConfig[f.key] : featureOn(f.key);
+                if (f.invert ? !checked : checked) on++;
+
+                const label = document.createElement('label');
+                label.className = 'feature-toggle';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = checked;
+                cb.addEventListener('change', () => {
+                    uiConfig[f.key] = cb.checked;
+                    uiConfig.displayPreset = 'custom';
+                    saveConfig();
+                    renderFeatureToggles();
+                });
+                const span = document.createElement('span');
+                span.innerText = f.name;
+                label.appendChild(cb);
+                label.appendChild(span);
+                list.appendChild(label);
+            });
+
+            const cnt = document.getElementById('featureCount');
+            if (cnt) cnt.innerText = `${on} / ${total} 表示中`;
+        }
+
+        function setAllFeatures(show) {
+            FEATURE_TOGGLES.forEach(f => {
+                if (f.group) return;
+                if (f.invert) { uiConfig[f.key] = !show; return; }
+                // 最小限にしても、確定ボタンと取り込みだけは残す（これが無いと何もできない）
+                const keepAlways = ['showConfirmBtn', 'showFilePick'];
+                uiConfig[f.key] = show ? true : keepAlways.includes(f.key);
+            });
+            uiConfig.displayPreset = 'custom';
+            saveConfig();
+            renderFeatureToggles();
+        }
+
+        const showAllFeaturesBtn = document.getElementById('showAllFeaturesBtn');
+        const hideAllFeaturesBtn = document.getElementById('hideAllFeaturesBtn');
+        if (showAllFeaturesBtn) {
+            showAllFeaturesBtn.addEventListener('click', () => {
+                setAllFeatures(true);
+                status.innerText = "すべての機能を表示しました。";
+            });
+            hideAllFeaturesBtn.addEventListener('click', () => {
+                setAllFeatures(false);
+                status.innerText = "表示を最小限にしました。隠れた操作はキーボードから使えます。";
+            });
+        }
 
         // ============================================================
         //  キー割り当ての設定画面
@@ -3253,6 +3364,7 @@
         // 画面表示にだけ描く（書き出しには含まれない）
         function drawImageCornerHandles(targetCtx) {
             if (currentMode !== 'select' || activeItemIndex === -1) return;
+            if (uiConfig.showCornerHandles === false) return;
             const corners = getImageCorners();
             if (!corners) return;
 
@@ -3942,7 +4054,8 @@
             const cy = cont.scrollTop + cont.clientHeight / 2;
 
             if (viewCenterMark) {
-                const on = (typeof viewZoom !== 'undefined') && viewZoom > 1.001;
+                const on = (typeof viewZoom !== 'undefined') && viewZoom > 1.001
+                    && viewCenterMark.dataset.allowed !== '0';
                 viewCenterMark.classList.toggle('visible', on);
                 if (on) {
                     viewCenterMark.style.left = cx + 'px';
@@ -4079,7 +4192,8 @@
             }
             if (rotateResetBtn) rotateResetBtn.disabled = Math.abs(total) < 0.01;
             if (angleDialWrap) {
-                angleDialWrap.classList.toggle('visible', currentMode === 'select' && activeItemIndex !== -1);
+                const allowed = angleDialWrap.dataset.allowed !== '0';
+                angleDialWrap.classList.toggle('visible', allowed && currentMode === 'select' && activeItemIndex !== -1);
             }
             if (typeof updateOverlayPositions === 'function') updateOverlayPositions();
             drawDial();
@@ -4579,7 +4693,7 @@
                     return;
                 }
                 // 写真の角をつまんだら拡大・縮小
-                const cornerIdx = getImageCornerAtPos(pos);
+                const cornerIdx = (uiConfig.showCornerHandles === false) ? -1 : getImageCornerAtPos(pos);
                 if (cornerIdx !== -1) {
                     const ctr = getImageCenter();
                     const d0 = Math.hypot(pos.x - ctr.x, pos.y - ctr.y);
