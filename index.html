@@ -746,6 +746,7 @@
                     <label style="margin-left:2px;">色の許容差:</label>
                     <input type="range" id="colorToleranceSlider" min="10" max="130" step="5" value="45" style="width:66px;">
                     <span id="colorToleranceValue">45</span>
+                    <button id="unlinkArrowBtn" class="btn-secondary" style="font-size:10px; padding:2px 6px;" disabled>連動を解除</button>
                     <button id="clearArrowsBtn" class="btn-danger" style="font-size:10px; padding:2px 6px;">全矢印消去</button>
                 </div>
             </div>
@@ -1000,8 +1001,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.10.2-beta';
-        const APP_BUILD = '20260828-1810';
+        const APP_VERSION = '0.11.0-beta';
+        const APP_BUILD = '20260903-0920';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -3463,44 +3464,56 @@
         }
 
         // --- 矢印（片方向・双方向）の描画ロジック ---
-        function drawSingleArrowObject(targetCtx, arrowObj, isSelected = false) {
+        // 矢印が短くても形が崩れないよう、長さに応じて矢尻と線の太さを決める。
+        // 下限を設けているので、極端に小さい矢印でも矢印として読める。
+        function arrowMetrics(len) {
+            const head = Math.max(14, Math.min(26, len * 0.32));
+            const width = Math.max(5, Math.min(7, len * 0.09));
+            return { head, width };
+        }
+
+        function drawSingleArrowObject(targetCtx, arrowObj, isSelected = false, opts) {
+            const showHandles = opts && opts.handles;
             const start = arrowObj.start;
             const end = arrowObj.end;
             const color = arrowObj.color || "#ff0000";
             const isDouble = arrowObj.arrowType === 'double';
-            const headLength = 26;
             const dx = end.x - start.x;
             const dy = end.y - start.y;
+            const len = Math.hypot(dx, dy);
             const angle = Math.atan2(dy, dx);
+            const { head: headLength, width: lineW } = arrowMetrics(len);
 
-            targetCtx.save();
-            targetCtx.strokeStyle = color;
-            targetCtx.fillStyle = color;
-            targetCtx.lineWidth = 6;
-            targetCtx.lineCap = "round";
+            // 白フチ → 本体 の順で2回描く。
+            // 背景と同系色の商品でも矢印が沈まないようにするため。
+            const strokeArrow = (col, extra) => {
+                targetCtx.strokeStyle = col;
+                targetCtx.fillStyle = col;
+                targetCtx.lineWidth = lineW + extra;
+                targetCtx.lineJoin = 'round';
+                targetCtx.lineCap = 'round';
 
-            targetCtx.beginPath();
-            targetCtx.moveTo(start.x, start.y);
-            targetCtx.lineTo(end.x, end.y);
-            targetCtx.stroke();
-
-            // 終点側の矢尻
-            targetCtx.beginPath();
-            targetCtx.moveTo(end.x, end.y);
-            targetCtx.lineTo(end.x - headLength * Math.cos(angle - Math.PI / 6), end.y - headLength * Math.sin(angle - Math.PI / 6));
-            targetCtx.lineTo(end.x - headLength * Math.cos(angle + Math.PI / 6), end.y - headLength * Math.sin(angle + Math.PI / 6));
-            targetCtx.closePath();
-            targetCtx.fill();
-
-            // 始点側の矢尻 (双方向の場合)
-            if (isDouble) {
                 targetCtx.beginPath();
                 targetCtx.moveTo(start.x, start.y);
-                targetCtx.lineTo(start.x + headLength * Math.cos(angle - Math.PI / 6), start.y + headLength * Math.sin(angle - Math.PI / 6));
-                targetCtx.lineTo(start.x + headLength * Math.cos(angle + Math.PI / 6), start.y + headLength * Math.sin(angle + Math.PI / 6));
-                targetCtx.closePath();
-                targetCtx.fill();
-            }
+                targetCtx.lineTo(end.x, end.y);
+                targetCtx.stroke();
+
+                const headPath = (px, py, dir) => {
+                    targetCtx.beginPath();
+                    targetCtx.moveTo(px, py);
+                    targetCtx.lineTo(px - dir * headLength * Math.cos(angle - Math.PI / 6), py - dir * headLength * Math.sin(angle - Math.PI / 6));
+                    targetCtx.lineTo(px - dir * headLength * Math.cos(angle + Math.PI / 6), py - dir * headLength * Math.sin(angle + Math.PI / 6));
+                    targetCtx.closePath();
+                    if (extra > 0) { targetCtx.lineWidth = extra; targetCtx.stroke(); }
+                    targetCtx.fill();
+                };
+                headPath(end.x, end.y, 1);
+                if (isDouble) headPath(start.x, start.y, -1);
+            };
+
+            targetCtx.save();
+            strokeArrow('#ffffff', 5);   // フチ
+            strokeArrow(color, 0);       // 本体
 
             if (isSelected) {
                 targetCtx.strokeStyle = "#00bcd4";
@@ -3510,11 +3523,31 @@
                 targetCtx.moveTo(start.x, start.y);
                 targetCtx.lineTo(end.x, end.y);
                 targetCtx.stroke();
-
                 targetCtx.setLineDash([]);
-                targetCtx.fillStyle = "#00bcd4";
-                targetCtx.beginPath(); targetCtx.arc(start.x, start.y, 8, 0, Math.PI * 2); targetCtx.fill();
-                targetCtx.beginPath(); targetCtx.arc(end.x, end.y, 8, 0, Math.PI * 2); targetCtx.fill();
+            }
+
+            // 端のつまみ。ここをドラッグすると角度と長さを変えられる。
+            if (showHandles) {
+                [start, end].forEach(pt => {
+                    targetCtx.beginPath();
+                    targetCtx.arc(pt.x, pt.y, 11, 0, Math.PI * 2);
+                    targetCtx.fillStyle = '#ffffff';
+                    targetCtx.fill();
+                    targetCtx.strokeStyle = isSelected ? '#00bcd4' : '#007bff';
+                    targetCtx.lineWidth = 3;
+                    targetCtx.stroke();
+                });
+                // 連動している矢印は、中央に印を付けて分かるようにする
+                if (arrowObj.groupId) {
+                    const mx = (start.x + end.x) / 2, my = (start.y + end.y) / 2;
+                    targetCtx.beginPath();
+                    targetCtx.arc(mx, my, 7, 0, Math.PI * 2);
+                    targetCtx.fillStyle = '#ffb74d';
+                    targetCtx.fill();
+                    targetCtx.strokeStyle = '#ffffff';
+                    targetCtx.lineWidth = 2;
+                    targetCtx.stroke();
+                }
             }
 
             if (arrowObj.lengthMm && arrowObj.lengthMm.trim() !== '') {
@@ -3551,9 +3584,10 @@
         function renderAllArrowsOnTop(targetCtx) {
             const item = getActiveItem();
             if (item && item.arrows) {
+                const showHandles = (currentMode === 'arrow' || currentMode === 'select');
                 item.arrows.forEach((arr, idx) => {
                     const isSel = (selectedObjectType === 'arrow' && selectedArrowIndex === idx);
-                    drawSingleArrowObject(targetCtx, arr, isSel);
+                    drawSingleArrowObject(targetCtx, arr, isSel, { handles: showHandles });
                 });
             }
             if (activeTempArrow) {
@@ -4539,6 +4573,32 @@
             status.innerText = `境界を検出し、水平の双方向矢印を配置しました（検出幅 ${width}px）。`;
         }
 
+        // --- 連動の解除 ---
+        const unlinkArrowBtn = document.getElementById('unlinkArrowBtn');
+        function updateUnlinkBtn() {
+            if (!unlinkArrowBtn) return;
+            const item = getActiveItem();
+            const arr = (item && item.arrows && selectedArrowIndex !== -1) ? item.arrows[selectedArrowIndex] : null;
+            unlinkArrowBtn.disabled = !(arr && arr.groupId);
+        }
+        if (unlinkArrowBtn) {
+            unlinkArrowBtn.addEventListener('click', () => {
+                const item = getActiveItem();
+                if (!item || selectedArrowIndex === -1) return;
+                const arr = item.arrows[selectedArrowIndex];
+                if (!arr || !arr.groupId) return;
+                const gid = arr.groupId;
+                delete arr.groupId;
+                // 残りが1本だけになったらグループ自体を解消する
+                const rest = item.arrows.filter(a => a.groupId === gid);
+                if (rest.length === 1) delete rest[0].groupId;
+                saveToDB();
+                refreshMainCanvas();
+                updateUnlinkBtn();
+                status.innerText = "この矢印の連動を解除しました。";
+            });
+        }
+
         clearArrowsBtn.addEventListener('click', () => {
             const item = getActiveItem();
             if (item && item.arrows && item.arrows.length > 0) {
@@ -4602,20 +4662,121 @@
             return null;
         }
 
+        // ============================================================
+        //  矢印の連動グループ
+        //  作図時に平行に吸着した矢印どうしを同じグループにまとめる。
+        //  片方を動かす・回すと、もう片方も同じだけ動く。
+        // ============================================================
+        // 矢印の端・線をドラッグした時の共通処理。
+        // ①選択・移動 と ④矢印・寸法 の両方から呼ぶ。
+        function handleArrowDrag(pos, e) {
+            const item = getActiveItem();
+            if (!item || !item.arrows || !item.arrows[selectedArrowIndex]) return;
+            const arr = item.arrows[selectedArrowIndex];
+            const dx = pos.x - dragStartPos.x;
+            const dy = pos.y - dragStartPos.y;
+
+            if (activeArrowHandle === 'move') {
+                // 線の部分をつかんだら、グループごと平行移動
+                moveArrowGroup(item, selectedArrowIndex, dx, dy);
+                if (arr.groupId) status.innerText = '連動中の矢印をまとめて移動しています';
+            } else {
+                // 端をつかんだら、角度と長さを自由に変えられる。
+                // Shift を押している間だけ 15度刻みに吸着する。
+                const fixed = (activeArrowHandle === 'start') ? arr.end : arr.start;
+                let ang = Math.atan2(pos.y - fixed.y, pos.x - fixed.x);
+                let len = Math.hypot(pos.x - fixed.x, pos.y - fixed.y);
+                len = Math.max(len, 30);   // 短すぎて見えなくなるのを防ぐ
+
+                if (e && e.shiftKey) {
+                    const step = Math.PI / 12;   // 15度
+                    ang = Math.round(ang / step) * step;
+                }
+                const moved = { x: fixed.x + Math.cos(ang) * len, y: fixed.y + Math.sin(ang) * len };
+                if (activeArrowHandle === 'start') { arr.start = moved; } else { arr.end = moved; }
+
+                // 連動している相手も同じ角度に揃える
+                if (arr.groupId) setArrowGroupAngle(item, selectedArrowIndex, arrowAngleOf(arr));
+
+                const deg = (arrowAngleOf(arr) * 180 / Math.PI).toFixed(1);
+                status.innerText = `角度 ${deg}° / 長さ ${Math.round(arrowLen(arr))}`
+                    + (arr.groupId ? '（連動中：もう一方も同じ角度になります）' : '（Shiftで15度刻み）');
+            }
+            dragStartPos = pos;
+            refreshMainCanvas();
+        }
+
+        function arrowAngleOf(a) { return Math.atan2(a.end.y - a.start.y, a.end.x - a.start.x); }
+        function arrowMid(a) { return { x: (a.start.x + a.end.x) / 2, y: (a.start.y + a.end.y) / 2 }; }
+        function arrowLen(a) { return Math.hypot(a.end.x - a.start.x, a.end.y - a.start.y); }
+
+        function groupMembers(item, idx) {
+            const arr = item && item.arrows && item.arrows[idx];
+            if (!arr || !arr.groupId) return [idx];
+            const out = [];
+            item.arrows.forEach((a, i) => { if (a.groupId === arr.groupId) out.push(i); });
+            return out;
+        }
+
+        // グループ全体を平行移動する
+        function moveArrowGroup(item, idx, dx, dy) {
+            groupMembers(item, idx).forEach(i => {
+                const a = item.arrows[i];
+                a.start.x += dx; a.start.y += dy;
+                a.end.x += dx; a.end.y += dy;
+            });
+        }
+
+        // グループ全体を同じ角度に揃える。
+        // それぞれ自分の中心を軸に回すので、長さと位置関係は保たれる。
+        function setArrowGroupAngle(item, idx, angle) {
+            groupMembers(item, idx).forEach(i => {
+                if (i === idx) return;
+                const a = item.arrows[i];
+                const m = arrowMid(a);
+                const half = arrowLen(a) / 2;
+                a.start = { x: m.x - Math.cos(angle) * half, y: m.y - Math.sin(angle) * half };
+                a.end = { x: m.x + Math.cos(angle) * half, y: m.y + Math.sin(angle) * half };
+            });
+        }
+
+        function nextGroupId() { return 'g' + Date.now().toString(36) + Math.floor(Math.random() * 1000); }
+
+        // 作図した矢印を、平行な既存の矢印と同じグループに入れる
+        function linkParallelArrow(item, newIdx) {
+            const arrows = item.arrows;
+            const a = arrows[newIdx];
+            const angA = arrowAngleOf(a);
+            const TOL = 0.02;   // 約1.1度
+
+            for (let i = 0; i < arrows.length; i++) {
+                if (i === newIdx) continue;
+                let d = Math.abs(angA - arrowAngleOf(arrows[i]));
+                d = Math.min(d, Math.abs(d - Math.PI), Math.abs(d - 2 * Math.PI));
+                if (d < TOL) {
+                    const gid = arrows[i].groupId || nextGroupId();
+                    arrows[i].groupId = gid;
+                    a.groupId = gid;
+                    return gid;
+                }
+            }
+            return null;
+        }
+
         function getArrowHitAtPos(pos) {
             const item = getActiveItem();
             if (!item || !item.arrows || item.arrows.length === 0) return null;
 
             for (let i = item.arrows.length - 1; i >= 0; i--) {
                 const arr = item.arrows[i];
-                if (Math.hypot(pos.x - arr.start.x, pos.y - arr.start.y) < 25) {
+                if (Math.hypot(pos.x - arr.start.x, pos.y - arr.start.y) < 34) {
                     return { index: i, handle: 'start' };
                 }
-                if (Math.hypot(pos.x - arr.end.x, pos.y - arr.end.y) < 25) {
+                if (Math.hypot(pos.x - arr.end.x, pos.y - arr.end.y) < 34) {
                     return { index: i, handle: 'end' };
                 }
                 const distToSegment = distanceToLineSegment(pos, arr.start, arr.end);
-                if (distToSegment < 18) {
+                if (distToSegment < 20) {
                     return { index: i, handle: 'move' };
                 }
             }
@@ -4715,7 +4876,10 @@
                     dragStartPos = pos;
                     saveState();
                     refreshMainCanvas();
-                    status.innerText = "矢印を選択中 (Deleteキーで個別に削除可能)";
+                    updateUnlinkBtn();
+                    status.innerText = arrHit.handle === 'move'
+                        ? "線をドラッグで移動／端のつまみで角度と長さを変えられます"
+                        : "端をつかみました。ドラッグで角度と長さを変えられます（Shiftで15度刻み）";
                     return;
                 }
 
@@ -4781,6 +4945,27 @@
             }
 
             if (currentMode === 'arrow') {
+                // 既にある矢印のつまみ・線をつかんだ場合は、新規描画ではなく編集にする。
+                // ここを見ていなかったため、④モードでは矢印を掴めず、
+                // 触ろうとすると新しい矢印が描かれてしまっていた。
+                const hit = getArrowHitAtPos(pos);
+                if (hit) {
+                    saveState();
+                    selectedObjectType = 'arrow';
+                    selectedArrowIndex = hit.index;
+                    activeSelectTarget = 'arrow';
+                    activeArrowHandle = hit.handle;
+                    isDrawing = true;
+                    dragStartPos = pos;
+                    updateUnlinkBtn();
+                    refreshMainCanvas();
+                    const grouped = getActiveItem().arrows[hit.index].groupId;
+                    status.innerText = hit.handle === 'move'
+                        ? `矢印を移動します${grouped ? '（連動中：平行な矢印も一緒に動きます）' : ''}`
+                        : `端をつかみました。ドラッグで角度と長さを変えられます（Shiftで15度刻み）${grouped ? '／連動中' : ''}`;
+                    return;
+                }
+
                 saveState();
                 isDrawing = true;
                 dragStartPos = pos;
@@ -4866,22 +5051,7 @@
                     dragStartPos = pos;
                     drawGuide();
                 } else if (activeSelectTarget === 'arrow' && selectedArrowIndex !== -1) {
-                    const item = getActiveItem();
-                    if (item && item.arrows[selectedArrowIndex]) {
-                        const arr = item.arrows[selectedArrowIndex];
-                        const dx = pos.x - dragStartPos.x;
-                        const dy = pos.y - dragStartPos.y;
-                        if (activeArrowHandle === 'start') {
-                            arr.start.x += dx; arr.start.y += dy;
-                        } else if (activeArrowHandle === 'end') {
-                            arr.end.x += dx; arr.end.y += dy;
-                        } else if (activeArrowHandle === 'move') {
-                            arr.start.x += dx; arr.start.y += dy;
-                            arr.end.x += dx; arr.end.y += dy;
-                        }
-                        dragStartPos = pos;
-                        refreshMainCanvas();
-                    }
+                    handleArrowDrag(pos, e);
                 }
                 return;
             }
@@ -4893,6 +5063,11 @@
             }
 
             if (currentMode === 'arrow') {
+                // 既存の矢印を編集中なら、新規描画には入らない
+                if (activeSelectTarget === 'arrow' && selectedArrowIndex !== -1) {
+                    handleArrowDrag(pos, e);
+                    return;
+                }
                 isSnappedToParallel = false;
                 let curAngle = Math.atan2(pos.y - dragStartPos.y, pos.x - dragStartPos.x);
                 let dist = Math.hypot(pos.x - dragStartPos.x, pos.y - dragStartPos.y);
@@ -4964,6 +5139,16 @@
                 return;
             }
 
+            // ④モードで既存の矢印を編集していた場合はここで保存して終わる
+            if (currentMode === 'arrow' && !activeTempArrow && activeSelectTarget === 'arrow') {
+                activeSelectTarget = null;
+                activeArrowHandle = null;
+                saveToDB();
+                syncActiveItemCanvas(true);
+                refreshMainCanvas();
+                return;
+            }
+
             if (currentMode === 'arrow' && activeTempArrow) {
                 isSnappedToParallel = false;
                 const dist = Math.hypot(activeTempArrow.end.x - activeTempArrow.start.x, activeTempArrow.end.y - activeTempArrow.start.y);
@@ -4979,6 +5164,12 @@
                         item.arrows.push(activeTempArrow);
                         selectedObjectType = 'arrow';
                         selectedArrowIndex = item.arrows.length - 1;
+                        // 平行に吸着していた場合は、その相手と連動させる
+                        const gid = linkParallelArrow(item, selectedArrowIndex);
+                        if (gid) {
+                            const n = groupMembers(item, selectedArrowIndex).length;
+                            status.innerText = `平行な矢印 ${n} 本を連動させました（片方を動かすと両方動きます）`;
+                        }
                         saveToDB();
                     }
                 }
