@@ -1001,8 +1001,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.11.0-beta';
-        const APP_BUILD = '20260903-0920';
+        const APP_VERSION = '0.11.1-beta';
+        const APP_BUILD = '20260903-0950';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -3586,7 +3586,8 @@
             if (item && item.arrows) {
                 const showHandles = (currentMode === 'arrow' || currentMode === 'select');
                 item.arrows.forEach((arr, idx) => {
-                    const isSel = (selectedObjectType === 'arrow' && selectedArrowIndex === idx);
+                    const isSel = (selectedObjectType === 'arrow' && selectedArrowIndex === idx)
+                        || arrowRangeHits.has(idx);
                     drawSingleArrowObject(targetCtx, arr, isSel, { handles: showHandles });
                 });
             }
@@ -3610,6 +3611,7 @@
             drawImageCornerHandles(ctx);
 
             renderAllArrowsOnTop(ctx);
+            drawArrowRangeBox(ctx);
 
             if (isSnappedToParallel) {
                 ctx.save();
@@ -4438,7 +4440,7 @@
             } else if (mode === 'mask') {
                 status.innerText = "③ 名前消し: 不要な文字やロゴをブラシで塗りつぶして消去します。";
             } else if (mode === 'arrow') {
-                status.innerText = "④ 矢印・寸法: ドラッグで矢印を描画します。他の矢印と平行になるとピタッと吸着します。";
+                status.innerText = "④ 矢印・寸法: ドラッグで描画（平行に吸着）／端で角度と長さ／黄丸で1本だけ移動／Ctrl+ドラッグで囲んで群にする";
             }
             refreshMainCanvas();
         }
@@ -4676,7 +4678,13 @@
             const dx = pos.x - dragStartPos.x;
             const dy = pos.y - dragStartPos.y;
 
-            if (activeArrowHandle === 'move') {
+            if (activeArrowHandle === 'single') {
+                // 中央の丸をつかんだ時は、この1本だけを動かす。
+                // 角度は変えないので、群の平行はそのまま保たれる。
+                arr.start.x += dx; arr.start.y += dy;
+                arr.end.x += dx; arr.end.y += dy;
+                status.innerText = 'この矢印だけを移動しています（角度は固定なので平行は保たれます）';
+            } else if (activeArrowHandle === 'move') {
                 // 線の部分をつかんだら、グループごと平行移動
                 moveArrowGroup(item, selectedArrowIndex, dx, dy);
                 if (arr.groupId) status.innerText = '連動中の矢印をまとめて移動しています';
@@ -4740,6 +4748,70 @@
             });
         }
 
+        // ============================================================
+        //  範囲指定で矢印を1つの群にまとめる
+        //  ④モードで Ctrl を押しながらドラッグすると枠が出て、
+        //  囲んだ矢印がまとめて1つの群になる。
+        // ============================================================
+        let arrowRangeSelecting = false;
+        let arrowRangeStart = null;
+        let arrowRangeEnd = null;
+        let arrowRangeHits = new Set();
+
+        // 線分が矩形と交わるか（端点が入っていれば十分なので簡易判定）
+        function arrowInRect(a, r) {
+            const inside = (p) => p.x >= r.x1 && p.x <= r.x2 && p.y >= r.y1 && p.y <= r.y2;
+            if (inside(a.start) || inside(a.end)) return true;
+            const m = arrowMid(a);
+            return inside(m);
+        }
+
+        function updateArrowRangeHits() {
+            const item = getActiveItem();
+            arrowRangeHits = new Set();
+            if (!item || !item.arrows || !arrowRangeStart || !arrowRangeEnd) return;
+            const r = {
+                x1: Math.min(arrowRangeStart.x, arrowRangeEnd.x),
+                x2: Math.max(arrowRangeStart.x, arrowRangeEnd.x),
+                y1: Math.min(arrowRangeStart.y, arrowRangeEnd.y),
+                y2: Math.max(arrowRangeStart.y, arrowRangeEnd.y)
+            };
+            item.arrows.forEach((a, i) => { if (arrowInRect(a, r)) arrowRangeHits.add(i); });
+        }
+
+        function drawArrowRangeBox(targetCtx) {
+            if (!arrowRangeSelecting || !arrowRangeStart || !arrowRangeEnd) return;
+            const x = Math.min(arrowRangeStart.x, arrowRangeEnd.x);
+            const y = Math.min(arrowRangeStart.y, arrowRangeEnd.y);
+            const w = Math.abs(arrowRangeEnd.x - arrowRangeStart.x);
+            const h = Math.abs(arrowRangeEnd.y - arrowRangeStart.y);
+            targetCtx.save();
+            targetCtx.strokeStyle = '#00bcd4';
+            targetCtx.lineWidth = 3;
+            targetCtx.setLineDash([10, 6]);
+            targetCtx.strokeRect(x, y, w, h);
+            targetCtx.fillStyle = 'rgba(0,188,212,0.14)';
+            targetCtx.fillRect(x, y, w, h);
+            targetCtx.restore();
+        }
+
+        // 囲んだ矢印を1つの群にする
+        function groupSelectedArrows() {
+            const item = getActiveItem();
+            if (!item || arrowRangeHits.size === 0) return 0;
+            if (arrowRangeHits.size === 1) {
+                status.innerText = "2本以上を囲むと1つの群にできます。";
+                return 0;
+            }
+            const gid = nextGroupId();
+            arrowRangeHits.forEach(i => { item.arrows[i].groupId = gid; });
+            selectedObjectType = 'arrow';
+            selectedArrowIndex = Math.min(...arrowRangeHits);
+            saveToDB();
+            updateUnlinkBtn();
+            return arrowRangeHits.size;
+        }
+
         function nextGroupId() { return 'g' + Date.now().toString(36) + Math.floor(Math.random() * 1000); }
 
         // 作図した矢印を、平行な既存の矢印と同じグループに入れる
@@ -4769,6 +4841,13 @@
 
             for (let i = item.arrows.length - 1; i >= 0; i--) {
                 const arr = item.arrows[i];
+                // 群に入っている矢印は、中央の丸で「この1本だけ」動かせる
+                if (arr.groupId) {
+                    const m = arrowMid(arr);
+                    if (Math.hypot(pos.x - m.x, pos.y - m.y) < 20) {
+                        return { index: i, handle: 'single' };
+                    }
+                }
                 if (Math.hypot(pos.x - arr.start.x, pos.y - arr.start.y) < 34) {
                     return { index: i, handle: 'start' };
                 }
@@ -4945,6 +5024,18 @@
             }
 
             if (currentMode === 'arrow') {
+                // Ctrl+ドラッグは範囲指定（囲んだ矢印を1つの群にする）
+                if (e.ctrlKey || e.metaKey) {
+                    arrowRangeSelecting = true;
+                    arrowRangeStart = pos;
+                    arrowRangeEnd = pos;
+                    arrowRangeHits = new Set();
+                    isDrawing = true;
+                    refreshMainCanvas();
+                    status.innerText = "囲んだ矢印を1つの群にします（2本以上を囲んでください）";
+                    return;
+                }
+
                 // 既にある矢印のつまみ・線をつかんだ場合は、新規描画ではなく編集にする。
                 // ここを見ていなかったため、④モードでは矢印を掴めず、
                 // 触ろうとすると新しい矢印が描かれてしまっていた。
@@ -5063,6 +5154,13 @@
             }
 
             if (currentMode === 'arrow') {
+                if (arrowRangeSelecting) {
+                    arrowRangeEnd = pos;
+                    updateArrowRangeHits();
+                    refreshMainCanvas();
+                    status.innerText = `${arrowRangeHits.size} 本を選択中（離すと1つの群にします）`;
+                    return;
+                }
                 // 既存の矢印を編集中なら、新規描画には入らない
                 if (activeSelectTarget === 'arrow' && selectedArrowIndex !== -1) {
                     handleArrowDrag(pos, e);
@@ -5136,6 +5234,19 @@
                 }
                 scaleDragStart = null;
                 activeSelectTarget = null;
+                return;
+            }
+
+            if (currentMode === 'arrow' && arrowRangeSelecting) {
+                const n = groupSelectedArrows();
+                arrowRangeSelecting = false;
+                arrowRangeStart = null;
+                arrowRangeEnd = null;
+                arrowRangeHits = new Set();
+                refreshMainCanvas();
+                if (n >= 2) {
+                    status.innerText = `${n} 本を1つの群にしました（中央の丸で1本ずつ、線で全体を動かせます）`;
+                }
                 return;
             }
 
