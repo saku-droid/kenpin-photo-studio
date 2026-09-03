@@ -1001,8 +1001,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.11.2-beta';
-        const APP_BUILD = '20260903-1040';
+        const APP_VERSION = '0.11.3-beta';
+        const APP_BUILD = '20260903-1120';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1974,7 +1974,10 @@
                         userName: i.userName || '',
                         hasMaskEdits: !!i.hasMaskEdits,
                         vignetteShape: i.vignetteShape || null,
-                        arrows: i.arrows || [],
+                        arrows: (i.arrows || []).map(a => {
+                            const { _labelBox, ...rest } = a;   // 描画用の一時情報は保存しない
+                            return rest;
+                        }),
                         imageAngle: i.imageAngle || 0,
                         imageScale: i.imageScale || 1.0,
                         offsetX: i.offsetX || 0,
@@ -3550,6 +3553,12 @@
                 }
             }
 
+            // 数値が無い時は箱の判定も消す。残っていると、
+            // 何も無い場所で矢印をつかんでしまう。
+            if (!arrowObj.lengthMm || arrowObj.lengthMm.trim() === '') {
+                arrowObj._labelBox = null;
+            }
+
             if (arrowObj.lengthMm && arrowObj.lengthMm.trim() !== '') {
                 const midX = (start.x + end.x) / 2;
                 const midY = (start.y + end.y) / 2;
@@ -3559,6 +3568,14 @@
                 targetCtx.font = "bold 20px sans-serif";
                 const textWidth = targetCtx.measureText(text).width;
                 const padX = 8, padY = 5;
+
+                // 箱の範囲を覚えておく。ダブルクリックで数値を直すときの当たり判定に使う。
+                arrowObj._labelBox = {
+                    x: midX - textWidth / 2 - padX,
+                    y: midY - 14 - padY,
+                    w: textWidth + padX * 2,
+                    h: 28 + padY
+                };
 
                 targetCtx.fillStyle = "rgba(255, 255, 255, 0.95)";
                 targetCtx.strokeStyle = isSelected ? "#00bcd4" : color;
@@ -4093,9 +4110,50 @@
             }, 350);
         }, { passive: false });
 
+        // 寸法の数値を直す。矢印の数値の箱をダブルクリックすると入力できる。
+        function editArrowLabel(index) {
+            const item = getActiveItem();
+            if (!item || !item.arrows || !item.arrows[index]) return false;
+            const arr = item.arrows[index];
+
+            const current = (arr.lengthMm || '').replace(/mm$/i, '').trim();
+            const input = prompt(
+                '寸法の数値（mm単位）を入力してください:\n※空欄にすると数値を消します',
+                current
+            );
+            if (input === null) return true;   // キャンセル
+
+            saveState();
+            arr.lengthMm = input.trim();
+            selectedObjectType = 'arrow';
+            selectedArrowIndex = index;
+            saveToDB();
+            refreshMainCanvas();
+            status.innerText = arr.lengthMm
+                ? `寸法を ${arr.lengthMm}mm に変更しました。`
+                : '寸法の表示を消しました。';
+            return true;
+        }
+
+        // 矢印の数値の箱をダブルクリック → 数値を直す
+        canvas.addEventListener('dblclick', (e) => {
+            if (activeItemIndex === -1) return;
+            if (currentMode !== 'arrow' && currentMode !== 'select') return;
+            const pos = getPos(e);
+            const hit = getArrowHitAtPos(pos, { handlesOnly: true });
+            if (hit && hit.handle === 'label') {
+                e.preventDefault();
+                e.stopPropagation();
+                editArrowLabel(hit.index);
+            }
+        });
+
         // ダブルクリックで等倍・中央に戻す
         canvas.addEventListener('dblclick', (e) => {
             if (activeItemIndex === -1 || currentMode !== 'select') return;
+            // 寸法の箱の上なら、写真のリセットではなく数値の編集を優先する
+            const hit = getArrowHitAtPos(getPos(e), { handlesOnly: true });
+            if (hit && hit.handle === 'label') return;
             e.preventDefault();
             currentImageScale = 1.0;
             currentOffsetX = 0;
@@ -4440,7 +4498,7 @@
             } else if (mode === 'mask') {
                 status.innerText = "③ 名前消し: 不要な文字やロゴをブラシで塗りつぶして消去します。";
             } else if (mode === 'arrow') {
-                status.innerText = "④ 矢印・寸法: ドラッグで描画（平行に吸着）／白丸で角度と長さ／黄丸で1本だけ移動／Ctrl+ドラッグで囲んで群にする／移動は①";
+                status.innerText = "④ 矢印・寸法: ドラッグで描画／白丸で角度と長さ／黄丸で1本だけ移動／数値をダブルクリックで直す／Ctrl+ドラッグで群にする";
             }
             refreshMainCanvas();
         }
@@ -4848,6 +4906,11 @@
 
             for (let i = item.arrows.length - 1; i >= 0; i--) {
                 const arr = item.arrows[i];
+                // 寸法の箱。ダブルクリックで数値を直せるようにするため位置を見る。
+                const b = arr._labelBox;
+                if (b && pos.x >= b.x && pos.x <= b.x + b.w && pos.y >= b.y && pos.y <= b.y + b.h) {
+                    return { index: i, handle: 'label' };
+                }
                 // 群に入っている矢印は、中央の丸で「この1本だけ」動かせる
                 if (arr.groupId) {
                     const m = arrowMid(arr);
@@ -4960,7 +5023,7 @@
                     selectedObjectType = 'arrow';
                     selectedArrowIndex = arrHit.index;
                     activeSelectTarget = 'arrow';
-                    activeArrowHandle = arrHit.handle;
+                    activeArrowHandle = (arrHit.handle === 'label') ? 'move' : arrHit.handle;
                     isDrawing = true;
                     dragStartPos = pos;
                     saveState();
@@ -5055,7 +5118,8 @@
                     selectedObjectType = 'arrow';
                     selectedArrowIndex = hit.index;
                     activeSelectTarget = 'arrow';
-                    activeArrowHandle = hit.handle;
+                    // 数値の箱はドラッグで矢印ごと動かす（ダブルクリックは別途拾う）
+                    activeArrowHandle = (hit.handle === 'label') ? 'single' : hit.handle;
                     isDrawing = true;
                     dragStartPos = pos;
                     updateUnlinkBtn();
