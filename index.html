@@ -1001,8 +1001,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.11.3-beta';
-        const APP_BUILD = '20260903-1120';
+        const APP_VERSION = '0.11.4-beta';
+        const APP_BUILD = '20260903-1635';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -3394,11 +3394,54 @@
             }));
         }
 
-        function getImageCornerAtPos(pos) {
+        // 拡大すると写真の角は枠の外へ出てしまい、そのままでは掴めなくなる。
+        // （4倍で角は -1800,-1200 まで飛ぶ）
+        // 中心から角へ向かう線上で、枠の内側に収まる位置までつまみを引き戻す。
+        // 拡大縮小は「中心からの距離の比」で決めているので、
+        // つまみを引き戻しても操作の結果は変わらない。
+        const CORNER_MARGIN = 18;
+
+        function clampHandleToCanvas(pt, center) {
+            const m = CORNER_MARGIN;
+            const inX = pt.x >= m && pt.x <= 1200 - m;
+            const inY = pt.y >= m && pt.y <= 1200 - m;
+            if (inX && inY) return { x: pt.x, y: pt.y, clamped: false };
+
+            const dx = pt.x - center.x, dy = pt.y - center.y;
+            let t = 1;
+            const limit = (d, c, lo, hi) => {
+                if (Math.abs(d) < 1e-6) return 1;
+                if (c + d < lo) return (lo - c) / d;
+                if (c + d > hi) return (hi - c) / d;
+                return 1;
+            };
+            t = Math.min(t, limit(dx, center.x, m, 1200 - m));
+            t = Math.min(t, limit(dy, center.y, m, 1200 - m));
+            if (!isFinite(t) || t < 0) t = 0;
+
+            // 大きくはみ出している時だけ印を変える。
+            // 等倍でも角は枠の縁に来るので、常時オレンジだと警告に見えてしまう。
+            const farOut = pt.x < -40 || pt.x > 1240 || pt.y < -40 || pt.y > 1240;
+            return {
+                x: Math.max(m, Math.min(1200 - m, center.x + dx * t)),
+                y: Math.max(m, Math.min(1200 - m, center.y + dy * t)),
+                clamped: farOut
+            };
+        }
+
+        // 画面に出す（＝掴める）つまみの位置
+        function getImageCornerHandles() {
             const corners = getImageCorners();
-            if (!corners) return -1;
+            if (!corners) return null;
+            const c = getImageCenter();
+            return corners.map(pt => clampHandleToCanvas(pt, c));
+        }
+
+        function getImageCornerAtPos(pos) {
+            const handles = getImageCornerHandles();
+            if (!handles) return -1;
             for (let i = 0; i < 4; i++) {
-                if (Math.hypot(pos.x - corners[i].x, pos.y - corners[i].y) < CORNER_HIT) return i;
+                if (Math.hypot(pos.x - handles[i].x, pos.y - handles[i].y) < CORNER_HIT) return i;
             }
             return -1;
         }
@@ -3409,9 +3452,10 @@
             if (uiConfig.showCornerHandles === false) return;
             const corners = getImageCorners();
             if (!corners) return;
+            const handles = getImageCornerHandles();
 
             targetCtx.save();
-            // 角どうしを結ぶ枠
+            // 写真の外形（枠の外に出ている部分は見えないが、傾きの目安になる）
             targetCtx.strokeStyle = 'rgba(0, 123, 255, 0.55)';
             targetCtx.lineWidth = 2;
             targetCtx.setLineDash([8, 6]);
@@ -3422,12 +3466,13 @@
             targetCtx.stroke();
             targetCtx.setLineDash([]);
 
-            corners.forEach(pt => {
+            handles.forEach(pt => {
                 targetCtx.beginPath();
                 targetCtx.arc(pt.x, pt.y, CORNER_RADIUS, 0, Math.PI * 2);
                 targetCtx.fillStyle = '#ffffff';
                 targetCtx.fill();
-                targetCtx.strokeStyle = '#007bff';
+                // 枠の外にある角を引き戻して表示している時は色を変えて示す
+                targetCtx.strokeStyle = pt.clamped ? '#ff9800' : '#007bff';
                 targetCtx.lineWidth = 3;
                 targetCtx.stroke();
             });
@@ -5051,14 +5096,17 @@
                 if (cornerIdx !== -1) {
                     const ctr = getImageCenter();
                     const d0 = Math.hypot(pos.x - ctr.x, pos.y - ctr.y);
-                    if (d0 > 20) {
+                    if (d0 > 12) {
                         selectedObjectType = null;
                         selectedArrowIndex = -1;
                         activeSelectTarget = 'scale';
-                        scaleDragStart = { dist: d0, scale: currentImageScale || 1 };
+                        scaleDragStart = { dist: d0, scale: currentImageScale || 1, pointerId: e.pointerId };
                         isDrawing = true;
                         saveState();
-                        status.innerText = "角をドラッグして大きさを変えられます（縦横比は保たれます）";
+                        // 枠の外まで引っ張れるようにポインタを捕捉する。
+                        // これが無いと canvas から出た時点で反応が止まる。
+                        try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+                        status.innerText = "角を外へ引くと拡大、内へ引くと縮小します（縦横比は保たれます）";
                         return;
                     }
                 }
@@ -5191,7 +5239,9 @@
                         currentImageScale = Math.min(Math.max(next, MIN_IMAGE_SCALE), MAX_IMAGE_SCALE);
                         applyImageTransform({ history: false, persist: false });
                         scheduleTransformCommit();
-                        status.innerText = `写真の大きさ ${Math.round(currentImageScale * 100)}%（縦横比は保たれています）`;
+                        const atMax = currentImageScale >= MAX_IMAGE_SCALE - 0.001;
+                        status.innerText = `写真の大きさ ${Math.round(currentImageScale * 100)}%`
+                            + (atMax ? '（上限です）' : '（枠からはみ出た部分は書き出し時に切り取られます）');
                     }
                 } else if (activeSelectTarget === 'image') {
                     currentOffsetX += pos.x - dragStartPos.x;
@@ -5305,6 +5355,9 @@
                 if (activeSelectTarget === 'arrow') saveToDB();
                 if (activeSelectTarget === 'image' || activeSelectTarget === 'scale') {
                     clearTimeout(transformCommitTimer); syncActiveItemCanvas(true); saveToDB();
+                }
+                if (scaleDragStart && scaleDragStart.pointerId !== undefined) {
+                    try { canvas.releasePointerCapture(scaleDragStart.pointerId); } catch (err) {}
                 }
                 scaleDragStart = null;
                 activeSelectTarget = null;
