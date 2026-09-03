@@ -1001,8 +1001,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.11.1-beta';
-        const APP_BUILD = '20260903-0950';
+        const APP_VERSION = '0.11.2-beta';
+        const APP_BUILD = '20260903-1040';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -4440,7 +4440,7 @@
             } else if (mode === 'mask') {
                 status.innerText = "③ 名前消し: 不要な文字やロゴをブラシで塗りつぶして消去します。";
             } else if (mode === 'arrow') {
-                status.innerText = "④ 矢印・寸法: ドラッグで描画（平行に吸着）／端で角度と長さ／黄丸で1本だけ移動／Ctrl+ドラッグで囲んで群にする";
+                status.innerText = "④ 矢印・寸法: ドラッグで描画（平行に吸着）／白丸で角度と長さ／黄丸で1本だけ移動／Ctrl+ドラッグで囲んで群にする／移動は①";
             }
             refreshMainCanvas();
         }
@@ -4835,28 +4835,38 @@
             return null;
         }
 
-        function getArrowHitAtPos(pos) {
+        // handlesOnly を指定すると、画面に見えているつまみ（端の白丸・中央の黄丸）
+        // だけを対象にする。④矢印モードでは線の上を掴めるようにすると
+        // 新しい矢印が描けなくなるため、こちらを使う。
+        function getArrowHitAtPos(pos, opts) {
             const item = getActiveItem();
             if (!item || !item.arrows || item.arrows.length === 0) return null;
+
+            const handlesOnly = !!(opts && opts.handlesOnly);
+            const rEnd = handlesOnly ? 18 : 34;   // 端の白丸（描画半径11）
+            const rDot = handlesOnly ? 12 : 20;   // 中央の黄丸（描画半径7）
 
             for (let i = item.arrows.length - 1; i >= 0; i--) {
                 const arr = item.arrows[i];
                 // 群に入っている矢印は、中央の丸で「この1本だけ」動かせる
                 if (arr.groupId) {
                     const m = arrowMid(arr);
-                    if (Math.hypot(pos.x - m.x, pos.y - m.y) < 20) {
+                    if (Math.hypot(pos.x - m.x, pos.y - m.y) < rDot) {
                         return { index: i, handle: 'single' };
                     }
                 }
-                if (Math.hypot(pos.x - arr.start.x, pos.y - arr.start.y) < 34) {
+                if (Math.hypot(pos.x - arr.start.x, pos.y - arr.start.y) < rEnd) {
                     return { index: i, handle: 'start' };
                 }
-                if (Math.hypot(pos.x - arr.end.x, pos.y - arr.end.y) < 34) {
+                if (Math.hypot(pos.x - arr.end.x, pos.y - arr.end.y) < rEnd) {
                     return { index: i, handle: 'end' };
                 }
-                const distToSegment = distanceToLineSegment(pos, arr.start, arr.end);
-                if (distToSegment < 20) {
-                    return { index: i, handle: 'move' };
+                // 線の上をつかんでの移動は「① 選択・移動」だけで使う。
+                // ④で有効にすると、線の近くから新しい矢印を描けなくなる。
+                if (!handlesOnly) {
+                    if (distanceToLineSegment(pos, arr.start, arr.end) < 20) {
+                        return { index: i, handle: 'move' };
+                    }
                 }
             }
             return null;
@@ -5036,10 +5046,10 @@
                     return;
                 }
 
-                // 既にある矢印のつまみ・線をつかんだ場合は、新規描画ではなく編集にする。
-                // ここを見ていなかったため、④モードでは矢印を掴めず、
-                // 触ろうとすると新しい矢印が描かれてしまっていた。
-                const hit = getArrowHitAtPos(pos);
+                // つまみ（端の白丸・中央の黄丸）をつかんだ時だけ編集にする。
+                // それ以外はどこを押しても新規描画になるので、
+                // 既存の矢印の近くでも新しい矢印を描ける。
+                const hit = getArrowHitAtPos(pos, { handlesOnly: true });
                 if (hit) {
                     saveState();
                     selectedObjectType = 'arrow';
