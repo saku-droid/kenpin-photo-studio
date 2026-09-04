@@ -583,6 +583,17 @@
         .config-group { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
         .config-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 
+        /* 保存先の接続状態カード */
+        .drive-card { background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; }
+        .drive-card.connected { border-color: #0f9d58; background: rgba(15,157,88,0.08); }
+        .drive-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .drive-state-icon { font-size: 20px; line-height: 1; }
+        .drive-state-title { font-size: 13px; font-weight: bold; }
+        .drive-card.connected .drive-state-title { color: #0f9d58; }
+        body:not(.theme-white) .drive-card.connected .drive-state-title { color: #00e676; }
+        .drive-state-sub { font-size: 11px; color: var(--text-sub); margin-top: 2px; word-break: break-all; }
+        .drive-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
         /* 表示モードのプリセット */
         .mode-preset-row { display: flex; gap: 8px; }
         .mode-preset, .pending-pos {
@@ -825,6 +836,7 @@
                 <div style="display:flex; gap:4px;">
                     <button id="downloadZipBtn" class="btn-zip" style="font-size:10px; padding:3px 6px;">📦 ZIP一括DL</button>
                     <button id="exportDriveBtn" class="btn-drive" style="font-size:10px; padding:3px 6px; display:none;" title="接続中のフォルダへ直接書き出す">💾 フォルダへ書出</button>
+                    <button id="shareBtn" class="btn-drive" style="font-size:10px; padding:3px 6px; display:none; background:#0f9d58;" title="Googleドライブ・LINE・メールなどへ送る">📤 共有</button>
                     <button id="openVaultBtn" class="btn-secondary" style="font-size:10px; padding:3px 6px; background:#444;">保管庫</button>
                     <button id="addFolderBtn" class="btn-secondary" style="font-size:10px; padding:3px 6px;">＋ フォルダ</button>
                 </div>
@@ -846,7 +858,7 @@
             <div class="modal-header">
                 <div style="display:flex; align-items:center; gap:12px;">
                     <h3 style="margin:0;">📦 写真保管庫 (全データ一覧)</h3>
-                    <button id="driveSyncBtn" class="btn-drive" style="font-size:11px; padding:4px 10px;">☁️ Drive一括同期</button>
+                    <button id="driveSyncBtn" class="btn-drive" style="font-size:11px; padding:4px 10px; display:none;" title="アクセストークンを手入力する旧方式（1時間で失効するため通常は使いません）">☁️ Drive一括同期（旧）</button>
                 </div>
                 <button id="closeVaultBtn" class="btn-danger" style="padding:4px 10px;">✕ 閉じる</button>
             </div>
@@ -923,16 +935,41 @@
                         フォルダ内の写真をまとめて読み込むこともできます。（OneDrive や Google ドライブの同期フォルダを選べば、そのままクラウドにも上がります）
                     </p>
                     <div id="driveUnsupported" style="display:none; font-size:11px; background:rgba(220,53,69,0.15); border:1px solid #dc3545; border-radius:4px; padding:8px; margin-bottom:8px; line-height:1.6;"></div>
-                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                        <button id="connectDriveBtn" class="btn-drive" style="font-size:11px;">📂 保存先フォルダを選ぶ</button>
-                        <button id="importDriveBtn" class="btn-secondary" style="font-size:11px;">⬇ このフォルダから写真を読み込む</button>
-                        <button id="disconnectDriveBtn" class="btn-secondary" style="font-size:11px; background:#666;">接続を解除</button>
+
+                    <!-- 今つながっているかを一目で示す -->
+                    <div id="driveCard" class="drive-card">
+                        <div class="drive-card-head">
+                            <span id="driveStateIcon" class="drive-state-icon">—</span>
+                            <div style="flex:1; min-width:0;">
+                                <div id="driveStateTitle" class="drive-state-title">未接続</div>
+                                <div id="driveStateSub" class="drive-state-sub">保存先を選ぶと、確定と同時に書き出せます</div>
+                            </div>
+                        </div>
+                        <div class="drive-actions">
+                            <button id="connectGDriveBtn" class="btn-drive" style="font-size:11px;">☁️ Googleドライブへ接続</button>
+                            <button id="connectDriveBtn" class="btn-secondary" style="font-size:11px;">💻 パソコンのフォルダ（C: / D:）</button>
+                            <button id="importDriveBtn" class="btn-secondary" style="font-size:11px;">⬇ このフォルダから読み込む</button>
+                            <button id="disconnectDriveBtn" class="btn-secondary" style="font-size:11px; background:#666;">接続を解除</button>
+                        </div>
                     </div>
+
                     <label class="config-item" style="margin-top:10px; font-weight:bold; color:#00e676;">
                         <input type="checkbox" id="cfgAutoExportOnConfirm" checked>
                         <span>確定（Enter・一括確定）したら、200KB以下にして保存先フォルダへ自動で書き出す</span>
                     </label>
                     <div id="driveStatus" style="font-size:11px; margin-top:8px; color:var(--text-sub);">未接続</div>
+
+                    <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border-sub);">
+                        <div style="font-size:12px; font-weight:bold; margin-bottom:6px;">端末ごとの保存先の選び方</div>
+                        <table style="font-size:11px; width:100%; border-collapse:collapse;">
+                            <tr><td style="padding:3px 6px 3px 0; white-space:nowrap; color:var(--text-sub);">パソコン<br>C: / D: ドライブ</td>
+                                <td style="padding:3px 0;">上の「📂 保存先フォルダを選ぶ」でそのドライブのフォルダを指定します。確定と同時に書き出されます。</td></tr>
+                            <tr><td style="padding:3px 6px 3px 0; white-space:nowrap; color:var(--text-sub);">パソコン<br>Googleドライブ</td>
+                                <td style="padding:3px 0;">Googleドライブのパソコン版を入れて、その同期フォルダ（例: G:\マイドライブ\検品写真）を保存先に指定します。書き出すと自動でクラウドへ上がります。</td></tr>
+                            <tr><td style="padding:3px 6px 3px 0; white-space:nowrap; color:var(--text-sub);">スマートフォン</td>
+                                <td style="padding:3px 0;">右パネルの「📤 共有」から、Googleドライブ・LINE・メールなど端末に入っているアプリへ送れます。スマホではフォルダの直接指定はできません。</td></tr>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- 3. 画面UI表示のカスタマイズ -->
@@ -1013,8 +1050,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.11.7-beta';
-        const APP_BUILD = '20260904-1710';
+        const APP_VERSION = '0.12.0-beta';
+        const APP_BUILD = '20260904-1820';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1115,6 +1152,7 @@
             showPhotoNav: true,
             showPendingTools: true,
             displayPreset: 'beginner',
+            driveKind: '',
             pendingPosition: 'auto',
             subToolsHidden: false,
             keymap: {}
@@ -1470,6 +1508,7 @@
 
             { group: '右パネル（完了済み）' },
             { key: 'showZipBtn',       name: '📦 ZIP一括DL',            sel: '#downloadZipBtn',       disp: 'inline-block' },
+            { key: 'showShareBtn',     name: '📤 共有（スマホ向け）',     special: 'share' },
             { key: 'showVaultBtn',     name: '保管庫',                  sel: '#openVaultBtn',         disp: 'inline-block' },
             { key: 'showAddFolderBtn', name: '＋ フォルダ',             sel: '#addFolderBtn',         disp: 'inline-block' },
 
@@ -1494,6 +1533,7 @@
             // 個別に扱うもの
             const dial = document.getElementById('angleDialWrap');
             if (dial) dial.dataset.allowed = featureOn('showAngleDial') ? '1' : '0';
+            try { if (typeof updateShareBtn === 'function') updateShareBtn(); } catch (e) {}
             const mark = document.getElementById('viewCenterMark');
             if (mark) mark.dataset.allowed = featureOn('showCenterMark') ? '1' : '0';
 
@@ -3097,6 +3137,16 @@
                     dlBtn.title = 'フォルダ内の全確定画像をDL';
                     dlBtn.onclick = (e) => { e.stopPropagation(); downloadFolderItems(folder); };
                     folderActions.appendChild(dlBtn);
+
+                    // 端末の共有が使える時だけ、このフォルダだけを送るボタンを出す
+                    if (canShareFiles() && uiConfig.showShareBtn !== false) {
+                        const shBtn = document.createElement('button');
+                        shBtn.className = 'icon-btn';
+                        shBtn.innerHTML = '📤';
+                        shBtn.title = 'このフォルダをGoogleドライブ等へ共有';
+                        shBtn.onclick = (e) => { e.stopPropagation(); shareConfirmedPhotos(folder); };
+                        folderActions.appendChild(shBtn);
+                    }
                 }
 
                 const delFolderBtn = document.createElement('button');
@@ -5698,6 +5748,96 @@
             status.innerText = `ZIPファイルのダウンロードを開始しました！ (${count} 件)`;
         }
 
+        // ============================================================
+        //  端末の共有機能へ渡す（スマホ向け）
+        //  Googleドライブ・LINE・メールなど、端末に入っているアプリへ
+        //  そのまま送れる。ブラウザの保存領域の制限を受けない。
+        //  ※ パソコンでは対応しているブラウザが少ないため、
+        //    使える場合だけボタンを出す。
+        // ============================================================
+        function canShareFiles() {
+            if (!navigator.share || !navigator.canShare) return false;
+            try {
+                const probe = new File([new Blob(['x'], { type: 'image/jpeg' })], 't.jpg', { type: 'image/jpeg' });
+                return navigator.canShare({ files: [probe] });
+            } catch (e) { return false; }
+        }
+
+        // 起動直後にも呼ばれるため、要素はその都度取得する
+        // （const を参照すると初期化前エラーでスクリプトが止まる）
+        function updateShareBtn() {
+            const btn = document.getElementById('shareBtn');
+            if (!btn) return;
+            const allowed = uiConfig.showShareBtn !== false;
+            btn.style.display = (allowed && canShareFiles()) ? 'inline-block' : 'none';
+        }
+
+        // 確定済みの写真をファイルにして端末の共有へ渡す
+        async function shareConfirmedPhotos(targetFolder) {
+            if (!canShareFiles()) {
+                alert("この端末・ブラウザでは共有機能を使えません。\n\n"
+                    + "スマホの場合は Chrome または Safari でお試しください。\n"
+                    + "パソコンでは「📦 ZIP一括DL」または「💾 フォルダへ書出」をお使いください。");
+                return;
+            }
+
+            const files = [];
+            const src = targetFolder ? [targetFolder] : folders;
+            src.forEach(folder => {
+                folder.items.forEach(item => {
+                    if (item.isDone && item.editedBlob) {
+                        files.push(new File([item.editedBlob], `${sanitizeName(item.customName)}.jpg`, { type: 'image/jpeg' }));
+                    }
+                });
+            });
+
+            if (files.length === 0) {
+                alert("共有できる写真がありません。\n「確定して完了へ」で確定してからお試しください。");
+                return;
+            }
+
+            // 端末によって一度に渡せる枚数に上限がある。
+            // 全部を一度に渡そうとして失敗するより、まとめて減らす方が確実。
+            const MAX_AT_ONCE = 10;
+            let sending = files;
+            if (files.length > MAX_AT_ONCE) {
+                const ok = confirm(`${files.length} 件あります。\n\n`
+                    + `一度に送れる枚数には端末ごとの上限があるため、\n`
+                    + `まず先頭 ${MAX_AT_ONCE} 件を送ります。\n`
+                    + `（全部まとめて送るなら「📦 ZIP一括DL」が確実です）`);
+                if (!ok) return;
+                sending = files.slice(0, MAX_AT_ONCE);
+            }
+
+            if (!navigator.canShare({ files: sending })) {
+                alert("この端末では、この枚数・形式を共有できませんでした。\n"
+                    + "枚数を減らすか、「📦 ZIP一括DL」をお使いください。");
+                return;
+            }
+
+            try {
+                status.innerText = `${sending.length} 件を共有しています...`;
+                await navigator.share({
+                    files: sending,
+                    title: targetFolder ? targetFolder.name : '検品写真'
+                });
+                status.innerText = `${sending.length} 件を共有しました。`;
+            } catch (e) {
+                if (e && e.name === 'AbortError') {
+                    status.innerText = "共有をキャンセルしました。";
+                } else {
+                    console.error('共有に失敗:', e);
+                    status.innerText = `共有できませんでした（${e && e.name ? e.name : '不明'}）`;
+                }
+            }
+        }
+
+        const shareBtnEl = document.getElementById('shareBtn');
+        if (shareBtnEl) {
+            shareBtnEl.addEventListener('click', () => shareConfirmedPhotos(null));
+        }
+        updateShareBtn();
+
         downloadZipBtn.addEventListener('click', downloadAllAsZip);
 
         // ============================================================
@@ -5711,7 +5851,11 @@
         const importDriveBtn = document.getElementById('importDriveBtn');
         const disconnectDriveBtn = document.getElementById('disconnectDriveBtn');
         const exportDriveBtn = document.getElementById('exportDriveBtn');
-        const driveStatus = document.getElementById('driveStatus');
+        const driveStatus = document.getElementById('driveStatus');   // 旧表示（無い場合あり）
+        const driveStateIcon = document.getElementById('driveStateIcon');
+        const driveStateTitle = document.getElementById('driveStateTitle');
+        const driveStateSub = document.getElementById('driveStateSub');
+        const connectGDriveBtn = document.getElementById('connectGDriveBtn');
         const driveUnsupported = document.getElementById('driveUnsupported');
 
         let driveHandle = null;
@@ -5740,28 +5884,46 @@
         }
 
         function updateDriveUI() {
+            const card = document.getElementById('driveCard');
+            const setState = (icon, title, sub, connected) => {
+                if (driveStateIcon) driveStateIcon.innerText = icon;
+                if (driveStateTitle) driveStateTitle.innerText = title;
+                if (driveStateSub) driveStateSub.innerText = sub;
+                if (card) card.classList.toggle('connected', !!connected);
+                if (driveStatus) driveStatus.innerText = title;
+            };
+
             if (!driveSupported()) {
                 driveUnsupported.style.display = 'block';
                 driveUnsupported.innerHTML = driveUnsupportedReason();
-                connectDriveBtn.disabled = true;
-                importDriveBtn.disabled = true;
-                disconnectDriveBtn.disabled = true;
-                driveStatus.innerText = "利用できません";
+                [connectDriveBtn, connectGDriveBtn, importDriveBtn, disconnectDriveBtn].forEach(b => { if (b) b.disabled = true; });
+                setState('📱', 'この端末ではフォルダを直接指定できません',
+                    canShareFiles() ? '右パネルの「📤 共有」からGoogleドライブへ送れます'
+                                    : '「📦 ZIP一括DL」で書き出してください', false);
                 exportDriveBtn.style.display = 'none';
                 return;
             }
+
             driveUnsupported.style.display = 'none';
-            connectDriveBtn.disabled = false;
-            importDriveBtn.disabled = !driveHandle;
-            disconnectDriveBtn.disabled = !driveHandle;
+            [connectDriveBtn, connectGDriveBtn].forEach(b => { if (b) b.disabled = false; });
+            if (importDriveBtn) importDriveBtn.disabled = !driveHandle;
+            if (disconnectDriveBtn) disconnectDriveBtn.disabled = !driveHandle;
 
             if (driveHandle) {
-                driveStatus.innerHTML = `接続中: <strong style="color:#00e676;">📂 ${driveHandle.name}</strong>`;
-                connectDriveBtn.innerText = '📂 別のフォルダに変更';
+                const isGDrive = /drive|マイドライブ|My Drive/i.test(driveHandle.name || '')
+                    || uiConfig.driveKind === 'gdrive';
+                setState(isGDrive ? '☁️' : '💻',
+                    isGDrive ? 'Googleドライブに連携済み' : 'パソコンのフォルダに連携済み',
+                    `保存先: ${driveHandle.name}` + (uiConfig.autoExportOnConfirm !== false
+                        ? '（確定すると自動で書き出します）' : '（自動書き出しはオフ）'),
+                    true);
+                connectGDriveBtn.innerText = '☁️ 別のフォルダに変更';
+                connectDriveBtn.innerText = '💻 別のフォルダに変更';
                 exportDriveBtn.style.display = 'inline-block';
             } else {
-                driveStatus.innerText = "未接続";
-                connectDriveBtn.innerText = '📂 保存先フォルダを選ぶ';
+                setState('—', '未接続', '保存先を選ぶと、確定と同時に書き出せます', false);
+                connectGDriveBtn.innerText = '☁️ Googleドライブへ接続';
+                connectDriveBtn.innerText = '💻 パソコンのフォルダ（C: / D:）';
                 exportDriveBtn.style.display = 'none';
             }
         }
@@ -5799,11 +5961,44 @@
             }
         }
 
+        // Googleドライブは、パソコン版アプリの同期フォルダを保存先にする方式。
+        // ブラウザから直接クラウドへ書くにはOAuthの登録作業が要るが、
+        // 同期フォルダなら設定なしで同じことができる。
+        if (connectGDriveBtn) {
+            connectGDriveBtn.addEventListener('click', async () => {
+                if (!driveSupported()) { alert(driveUnsupportedReason().replace(/<br>/g, '\n')); return; }
+
+                const ok = confirm(
+                    'Googleドライブの「マイドライブ」フォルダを選んでください。\n\n'
+                    + '次に開くウィンドウで、パソコン版Googleドライブの同期フォルダ\n'
+                    + '（例: G:\\マイドライブ\\検品写真）を指定します。\n\n'
+                    + 'そこへ書き出した写真は、自動でクラウドへ上がります。\n\n'
+                    + '※パソコン版Googleドライブが入っていない場合は、\n'
+                    + '　先に Google のサイトから入れてください。'
+                );
+                if (!ok) return;
+
+                try {
+                    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                    driveHandle = handle;
+                    uiConfig.driveKind = 'gdrive';
+                    saveConfig();
+                    storeDriveHandle(handle);
+                    updateDriveUI();
+                    status.innerText = `Googleドライブの「${handle.name}」に接続しました。`;
+                } catch (e) {
+                    if (e.name !== 'AbortError') { console.error(e); alert('接続に失敗しました。\n' + (e.message || e)); }
+                }
+            });
+        }
+
         connectDriveBtn.addEventListener('click', async () => {
             if (!driveSupported()) { alert(driveUnsupportedReason().replace(/<br>/g, '\n')); return; }
             try {
                 const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
                 driveHandle = handle;
+                uiConfig.driveKind = 'local';
+                saveConfig();
                 storeDriveHandle(handle);
                 updateDriveUI();
                 status.innerText = `保存先フォルダ「${handle.name}」に接続しました。`;
@@ -5817,6 +6012,8 @@
 
         disconnectDriveBtn.addEventListener('click', () => {
             driveHandle = null;
+            uiConfig.driveKind = '';
+            saveConfig();
             if (db) {
                 try { db.transaction(DB_STORE, "readwrite").objectStore(DB_STORE).delete(DRIVE_KEY); } catch (e) {}
             }
