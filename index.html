@@ -1001,8 +1001,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.11.4-beta';
-        const APP_BUILD = '20260903-1635';
+        const APP_VERSION = '0.11.5-beta';
+        const APP_BUILD = '20260904-1615';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -4247,6 +4247,22 @@
                 dial.style.top = (cont.scrollTop + cont.clientHeight - dial.offsetHeight - 10) + 'px';
                 dial.style.bottom = 'auto';
             }
+
+            // 「この1枚をDL」も枠の中に置いているため、拡大してスクロールすると
+            // 中身と一緒に流れて画面外へ出てしまう。常に右上に留める。
+            const dlBtn = document.getElementById('downloadSingleBtn');
+            if (dlBtn && dlBtn.offsetParent) {
+                dlBtn.style.right = 'auto';
+                dlBtn.style.left = (cont.scrollLeft + cont.clientWidth - dlBtn.offsetWidth - 10) + 'px';
+                dlBtn.style.top = (cont.scrollTop + 10) + 'px';
+            }
+
+            // Before比較のバッジも同様
+            const badge = document.getElementById('compareBadge');
+            if (badge) {
+                badge.style.left = (cont.scrollLeft + 12) + 'px';
+                badge.style.top = (cont.scrollTop + 12) + 'px';
+            }
         }
 
         const viewZoomValue = document.getElementById('viewZoomValue');
@@ -4268,6 +4284,9 @@
                 canvas.style.maxWidth = '';
                 canvas.style.maxHeight = '';
                 cont.style.overflow = 'hidden';
+                // スクロール位置が残ると、枠の中の要素が画面外に置き去りになる
+                cont.scrollLeft = 0;
+                cont.scrollTop = 0;
             } else {
                 // 「全体表示」の大きさを基準に倍率をかける
                 const base = Math.min(cont.clientWidth, cont.clientHeight);
