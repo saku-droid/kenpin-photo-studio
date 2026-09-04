@@ -6,6 +6,8 @@
     <title>検品画像一括処理スタジオ</title>
     <!-- JSZipライブラリ（ZIP一括出力用） -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Googleアカウント連携（サインインとアクセス許可の取得に使う） -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         /* テーマ変数定義 */
         :root {
@@ -960,6 +962,53 @@
                     <div id="driveStatus" style="font-size:11px; margin-top:8px; color:var(--text-sub);">未接続</div>
 
                     <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border-sub);">
+                        <div style="font-size:12px; font-weight:bold; margin-bottom:6px;">☁️ Googleアカウントで直接アップロード</div>
+                        <p style="font-size:11px; margin:0 0 8px 0; color:var(--text-sub);">
+                            パソコン版Googleドライブが無くても、アプリから直接アップロードできます。<br>
+                            スマホからも使えます。利用にはクライアントIDの登録が必要です。
+                        </p>
+
+                        <div id="gAuthCard" class="drive-card">
+                            <div class="drive-card-head">
+                                <span id="gAuthIcon" class="drive-state-icon">—</span>
+                                <div style="flex:1; min-width:0;">
+                                    <div id="gAuthTitle" class="drive-state-title">未サインイン</div>
+                                    <div id="gAuthSub" class="drive-state-sub">クライアントIDを入れてサインインしてください</div>
+                                </div>
+                            </div>
+                            <div class="drive-actions">
+                                <button id="gSignInBtn" class="btn-drive" style="font-size:11px;">Googleでサインイン</button>
+                                <button id="gSignOutBtn" class="btn-secondary" style="font-size:11px; background:#666;" disabled>サインアウト</button>
+                                <button id="gUploadBtn" class="btn-secondary" style="font-size:11px;" disabled>確定分をアップロード</button>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:6px; margin-top:8px;">
+                            <input type="password" id="gClientIdInput" placeholder="Google クライアントID（末尾 .apps.googleusercontent.com）"
+                                style="flex:1; padding:6px; font-size:11px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-panel); color:var(--text-main);">
+                            <button id="gSaveClientIdBtn" class="btn-confirm" style="font-size:11px;">保存</button>
+                        </div>
+
+                        <label class="config-item" style="margin-top:8px; font-weight:bold; color:#00e676;">
+                            <input type="checkbox" id="cfgAutoUploadDrive">
+                            <span>確定したら、Googleドライブへも自動でアップロードする</span>
+                        </label>
+
+                        <details style="margin-top:8px;">
+                            <summary style="font-size:11px; cursor:pointer; color:var(--text-sub);">クライアントIDの取り方</summary>
+                            <ol style="font-size:11px; line-height:1.8; color:var(--text-sub); padding-left:18px; margin:6px 0 0 0;">
+                                <li>Google Cloud コンソール（console.cloud.google.com）を開く</li>
+                                <li>プロジェクトを作る（既存でも可）</li>
+                                <li>「APIとサービス」→「ライブラリ」で <b>Google Drive API</b> を有効にする</li>
+                                <li>「OAuth同意画面」を作る。ユーザーの種類は社内利用なら「内部」</li>
+                                <li>「認証情報」→「OAuth クライアント ID」→ 種類は <b>ウェブアプリケーション</b></li>
+                                <li>「承認済みの JavaScript 生成元」に <b id="gOriginHint">このページのURL</b> を追加</li>
+                                <li>できたクライアントIDを上の欄に貼って「保存」</li>
+                            </ol>
+                        </details>
+                    </div>
+
+                    <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border-sub);">
                         <div style="font-size:12px; font-weight:bold; margin-bottom:6px;">端末ごとの保存先の選び方</div>
                         <table style="font-size:11px; width:100%; border-collapse:collapse;">
                             <tr><td style="padding:3px 6px 3px 0; white-space:nowrap; color:var(--text-sub);">パソコン<br>C: / D: ドライブ</td>
@@ -1050,8 +1099,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.12.0-beta';
-        const APP_BUILD = '20260904-1820';
+        const APP_VERSION = '0.13.0-beta';
+        const APP_BUILD = '20260904-1900';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1153,6 +1202,8 @@
             showPendingTools: true,
             displayPreset: 'beginner',
             driveKind: '',
+            gClientId: '',
+            autoUploadDrive: false,
             pendingPosition: 'auto',
             subToolsHidden: false,
             keymap: {}
@@ -1398,6 +1449,7 @@
         openConfigBtn.addEventListener('click', () => {
             renderKeymapUI();
             renderFeatureToggles();
+            try { updateGAuthUI(); } catch (e) {}
             showConfigTab('display');
             configModal.style.display = 'flex';
         });
@@ -3044,7 +3096,7 @@
             if (selectedPendingKeys.size === 0) return;
             status.innerText = `${selectedPendingKeys.size} 件の写真を一括確定処理中 (200KB以下最適化)...`;
 
-            let n = 0, total = 0, exported = 0;
+            let n = 0, total = 0, exported = 0, uploaded = 0;
             const totalCount = selectedPendingKeys.size;
 
             for (const key of selectedPendingKeys) {
@@ -3057,6 +3109,7 @@
                     item.isDone = true;
                     await persistPhoto(item);      // 確定画像をDBへ保存
                     if (await autoExportOne(folder, item)) exported++;
+                    if (await autoUploadOne(folder, item)) uploaded++;
                     n++;
                     total += blob ? blob.size : 0;
                     status.innerText = `一括確定中... (${n}/${totalCount})`;
@@ -3070,6 +3123,7 @@
             status.innerText = n
                 ? `${n} 件を確定し右パネルへ移動しました（1200x1200 / 平均 ${formatSize(Math.round(total / n))}・すべて200KB以下）`
                     + (exported ? `／📂 ${driveHandle.name} へ ${exported} 件書き出し` : '')
+                    + (uploaded ? `／☁️ Googleドライブへ ${uploaded} 件アップロード` : '')
                 : "確定できる写真がありませんでした。";
         });
 
@@ -6060,8 +6114,269 @@
             handleFiles(files, driveHandle.name);
         });
 
+        // ============================================================
+        //  Googleアカウント連携（OAuth）
+        //  アクセス範囲は drive.file のみ。
+        //  このアプリが作ったファイルだけを扱うので、
+        //  利用者のドライブ全体を見ることはない。
+        // ============================================================
+        const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+        const GDRIVE_ROOT_NAME = '検品画像';
+
+        let gTokenClient = null;
+        let gAccessToken = null;
+        let gTokenExpiry = 0;
+        let gUserEmail = '';
+
+        const gAuthIcon = document.getElementById('gAuthIcon');
+        const gAuthTitle = document.getElementById('gAuthTitle');
+        const gAuthSub = document.getElementById('gAuthSub');
+        const gSignInBtn = document.getElementById('gSignInBtn');
+        const gSignOutBtn = document.getElementById('gSignOutBtn');
+        const gUploadBtn = document.getElementById('gUploadBtn');
+        const gClientIdInput = document.getElementById('gClientIdInput');
+        const gSaveClientIdBtn = document.getElementById('gSaveClientIdBtn');
+        const cfgAutoUploadDrive = document.getElementById('cfgAutoUploadDrive');
+
+        function gsiReady() {
+            return !!(window.google && google.accounts && google.accounts.oauth2);
+        }
+
+        function updateGAuthUI() {
+            const card = document.getElementById('gAuthCard');
+            const hasId = !!(uiConfig.gClientId || '').trim();
+            const signedIn = !!gAccessToken && Date.now() < gTokenExpiry;
+
+            if (gClientIdInput && document.activeElement !== gClientIdInput) {
+                gClientIdInput.value = uiConfig.gClientId || '';
+            }
+            const hint = document.getElementById('gOriginHint');
+            if (hint) hint.innerText = location.origin;
+
+            if (gSignInBtn) gSignInBtn.disabled = !hasId || !gsiReady();
+            if (gSignOutBtn) gSignOutBtn.disabled = !signedIn;
+            if (gUploadBtn) gUploadBtn.disabled = !signedIn;
+            if (cfgAutoUploadDrive) cfgAutoUploadDrive.checked = !!uiConfig.autoUploadDrive;
+
+            const set = (icon, title, sub, on) => {
+                if (gAuthIcon) gAuthIcon.innerText = icon;
+                if (gAuthTitle) gAuthTitle.innerText = title;
+                if (gAuthSub) gAuthSub.innerText = sub;
+                if (card) card.classList.toggle('connected', !!on);
+            };
+
+            if (!gsiReady()) {
+                set('⚠️', 'Googleの部品を読み込めていません',
+                    'インターネットに接続してから再読み込みしてください', false);
+            } else if (!hasId) {
+                set('—', '未設定', '下の欄にクライアントIDを入れてください', false);
+            } else if (signedIn) {
+                set('☁️', 'Googleドライブに接続済み',
+                    (gUserEmail ? gUserEmail + ' / ' : '') + `マイドライブの「${GDRIVE_ROOT_NAME}」へ保存します`, true);
+            } else {
+                set('—', '未サインイン', 'サインインするとアップロードできます', false);
+            }
+        }
+
+        // アクセス許可を取り、access token を用意する。
+        // 期限が切れていれば静かに取り直す。
+        function gEnsureToken(interactive) {
+            return new Promise((resolve, reject) => {
+                if (gAccessToken && Date.now() < gTokenExpiry - 60000) { resolve(gAccessToken); return; }
+                if (!gsiReady()) { reject(new Error('Googleの部品を読み込めていません')); return; }
+                const clientId = (uiConfig.gClientId || '').trim();
+                if (!clientId) { reject(new Error('クライアントIDが未設定です')); return; }
+
+                if (!gTokenClient || gTokenClient._clientId !== clientId) {
+                    gTokenClient = google.accounts.oauth2.initTokenClient({
+                        client_id: clientId,
+                        scope: GDRIVE_SCOPE,
+                        callback: () => {}
+                    });
+                    gTokenClient._clientId = clientId;
+                }
+
+                gTokenClient.callback = (resp) => {
+                    if (resp && resp.error) { reject(new Error(resp.error_description || resp.error)); return; }
+                    gAccessToken = resp.access_token;
+                    gTokenExpiry = Date.now() + (Number(resp.expires_in || 3600) * 1000);
+                    updateGAuthUI();
+                    resolve(gAccessToken);
+                };
+
+                try {
+                    gTokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+                } catch (e) { reject(e); }
+            });
+        }
+
+        async function gApi(url, opts) {
+            const token = await gEnsureToken(false);
+            const res = await fetch(url, {
+                ...opts,
+                headers: { ...(opts && opts.headers), Authorization: 'Bearer ' + token }
+            });
+            if (res.status === 401) {
+                // 期限切れ。取り直して1度だけやり直す。
+                gAccessToken = null;
+                const t2 = await gEnsureToken(false);
+                return fetch(url, { ...opts, headers: { ...(opts && opts.headers), Authorization: 'Bearer ' + t2 } });
+            }
+            return res;
+        }
+
+        // 同じ名前のフォルダがあれば使い、無ければ作る
+        async function gFindOrCreateFolder(name, parentId) {
+            const q = encodeURIComponent(
+                `name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder'`
+                + ` and trashed=false and '${parentId || 'root'}' in parents`);
+            const res = await gApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+            const data = await res.json();
+            if (data.files && data.files.length) return data.files[0].id;
+
+            const create = await gApi('https://www.googleapis.com/drive/v3/files', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder',
+                    parents: [parentId || 'root'] })
+            });
+            const made = await create.json();
+            if (!made.id) throw new Error('フォルダを作れませんでした');
+            return made.id;
+        }
+
+        // 同名のファイルがあれば中身を差し替える（重複を作らない）
+        async function gUploadFile(blob, name, folderId) {
+            const q = encodeURIComponent(`name='${name.replace(/'/g, "\\'")}' and trashed=false and '${folderId}' in parents`);
+            const found = await (await gApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`)).json();
+            const existingId = found.files && found.files[0] && found.files[0].id;
+
+            if (existingId) {
+                const res = await gApi(`https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=media`, {
+                    method: 'PATCH', headers: { 'Content-Type': 'image/jpeg' }, body: blob
+                });
+                if (!res.ok) throw new Error('更新に失敗 (' + res.status + ')');
+                return existingId;
+            }
+
+            const meta = { name, mimeType: 'image/jpeg', parents: [folderId] };
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+            form.append('file', blob);
+            const res = await gApi('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST', body: form
+            });
+            if (!res.ok) throw new Error('アップロードに失敗 (' + res.status + ')');
+            const made = await res.json();
+            return made.id;
+        }
+
+        // 確定済みの写真をまとめてアップロードする
+        async function gUploadConfirmed(targetFolder) {
+            const targets = [];
+            (targetFolder ? [targetFolder] : folders).forEach(folder => {
+                folder.items.forEach(item => {
+                    if (item.isDone && item.editedBlob) targets.push({ folder, item });
+                });
+            });
+            if (targets.length === 0) {
+                alert('アップロードできる写真がありません。\n「確定して完了へ」で確定してからお試しください。');
+                return 0;
+            }
+
+            try {
+                await gEnsureToken(false);
+            } catch (e) {
+                alert('Googleへのサインインが必要です。\n' + (e.message || e));
+                return 0;
+            }
+
+            status.innerText = 'Googleドライブへアップロード中...';
+            let rootId;
+            try { rootId = await gFindOrCreateFolder(GDRIVE_ROOT_NAME, 'root'); }
+            catch (e) { console.error(e); status.innerText = 'Googleドライブのフォルダを用意できませんでした。'; return 0; }
+
+            const folderIds = new Map();
+            let done = 0; const failed = [];
+
+            for (const { folder, item } of targets) {
+                try {
+                    let fid = folderIds.get(folder.id);
+                    if (!fid) { fid = await gFindOrCreateFolder(sanitizeName(folder.name), rootId); folderIds.set(folder.id, fid); }
+                    await gUploadFile(item.editedBlob, `${sanitizeName(item.customName)}.jpg`, fid);
+                    done++;
+                    status.innerText = `Googleドライブへアップロード中... (${done}/${targets.length})`;
+                } catch (e) {
+                    console.error('アップロード失敗:', item.customName, e);
+                    failed.push(item.customName);
+                }
+            }
+
+            status.innerText = failed.length
+                ? `Googleドライブへ ${done} 件アップロード（${failed.length} 件失敗）`
+                : `Googleドライブの「${GDRIVE_ROOT_NAME}」へ ${done} 件アップロードしました。`;
+            return done;
+        }
+
+        if (gSaveClientIdBtn) {
+            gSaveClientIdBtn.addEventListener('click', () => {
+                uiConfig.gClientId = gClientIdInput.value.trim();
+                gAccessToken = null; gTokenClient = null;
+                saveConfig();
+                updateGAuthUI();
+                status.innerText = uiConfig.gClientId ? 'クライアントIDを保存しました。' : 'クライアントIDを消しました。';
+            });
+            gSignInBtn.addEventListener('click', async () => {
+                try {
+                    await gEnsureToken(true);
+                    status.innerText = 'Googleドライブに接続しました。';
+                } catch (e) {
+                    alert('サインインできませんでした。\n\n' + (e.message || e)
+                        + '\n\nクライアントIDと、承認済みJavaScript生成元に\n'
+                        + location.origin + '\nが登録されているかご確認ください。');
+                }
+                updateGAuthUI();
+            });
+            gSignOutBtn.addEventListener('click', () => {
+                if (gAccessToken && gsiReady()) {
+                    try { google.accounts.oauth2.revoke(gAccessToken, () => {}); } catch (e) {}
+                }
+                gAccessToken = null; gTokenExpiry = 0; gUserEmail = '';
+                updateGAuthUI();
+                status.innerText = 'Googleドライブとの接続を解除しました。';
+            });
+            gUploadBtn.addEventListener('click', () => gUploadConfirmed(null));
+            cfgAutoUploadDrive.addEventListener('change', () => {
+                uiConfig.autoUploadDrive = cfgAutoUploadDrive.checked;
+                saveConfig();
+            });
+        }
+
+        // Googleの部品は非同期で読み込まれるので、用意できたら表示を直す
+        (function waitGsi(n) {
+            if (gsiReady()) { updateGAuthUI(); return; }
+            if (n > 40) { updateGAuthUI(); return; }
+            setTimeout(() => waitGsi(n + 1), 250);
+        })(0);
+
         // --- 確定した1枚を保存先フォルダへ書き出す（同名なら上書き）---
         //     フォルダが未接続、または設定がOFFの時は何もしない。
+        // 確定した1枚をGoogleドライブへ上げる（自動アップロードがオンの時だけ）
+        async function autoUploadOne(folder, item) {
+            if (!uiConfig.autoUploadDrive) return null;
+            if (!item || !item.editedBlob) return null;
+            if (!gAccessToken || Date.now() >= gTokenExpiry) return null;
+            try {
+                const rootId = await gFindOrCreateFolder(GDRIVE_ROOT_NAME, 'root');
+                const fid = await gFindOrCreateFolder(sanitizeName(folder.name), rootId);
+                await gUploadFile(item.editedBlob, `${sanitizeName(item.customName)}.jpg`, fid);
+                return `${GDRIVE_ROOT_NAME}/${sanitizeName(folder.name)}`;
+            } catch (e) {
+                console.error('自動アップロードに失敗:', e);
+                return null;
+            }
+        }
+
         async function autoExportOne(folder, item) {
             if (!driveHandle || !uiConfig.autoExportOnConfirm) return null;
             if (!item || !item.editedBlob) return null;
@@ -6196,11 +6511,13 @@
 
             // 保存先フォルダが接続されていれば、そのまま書き出す（同名は上書き）
             const exported = await autoExportOne(folder, confirmedItem);
+            const uploaded = await autoUploadOne(folder, confirmedItem);
 
             const sizeText = `${confirmedItem.customName}: ${formatSize(bestBlob ? bestBlob.size : 0)}`
                 + ' / 1200x1200'
                 + describeSizeBand(bestBlob)
-                + (exported ? ` → 📂 ${exported} へ書き出し` : '');
+                + (exported ? ` → 📂 ${exported} へ書き出し` : '')
+                + (uploaded ? ` → ☁️ ${uploaded} へアップロード` : '');
 
             triggerSlideToRightAnimation(() => {
                 const nextIndex = folder.items.findIndex((item, idx) => idx > activeItemIndex && !item.isDone);
