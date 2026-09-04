@@ -447,6 +447,13 @@
         }
         .work-area.side-strip .pending-header { flex-direction: column; align-items: flex-start; gap: 3px; }
         .work-area.side-strip .pending-list { flex-direction: column; overflow-x: hidden; overflow-y: auto; align-items: flex-start; }
+        /* 左に置くと幅が細いので、見出しを短くして折り返しを防ぐ */
+        .pending-label-short { display: none; }
+        .work-area.side-strip .pending-label { display: none; }
+        .work-area.side-strip .pending-label-short { display: inline; }
+        .work-area.side-strip .pending-header > span:first-child { gap: 3px; }
+        .work-area.side-strip #selectAllPendingBtn { margin-left: 0 !important; padding: 2px 5px; }
+        .work-area.side-strip #thumbSizeSelect { max-width: 100%; }
         .work-area.side-strip #pendingHelpText { display: none !important; }
         .work-area.side-strip #pendingBatchTools { flex-direction: column; align-items: stretch; width: 100%; }
 
@@ -785,8 +792,9 @@
                 <div class="pending-header">
                     <span style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
                         <button id="pendingToggleBtn" title="未完了リストの表示・非表示">▾</button>
-                        ⏳ 未完了写真: <span id="pendingCount">0</span>件
-                        <button id="selectAllPendingBtn" class="btn-secondary pending-tool" style="font-size:10px; padding:2px 6px; margin-left:4px;" title="すべて選択（Ctrl+A）">すべて選択</button>
+                        <span class="pending-label">⏳ 未完了写真:</span><span class="pending-label-short">⏳</span>
+                        <span id="pendingCount">0</span>件
+                        <button id="selectAllPendingBtn" class="btn-secondary pending-tool" style="font-size:10px; padding:2px 6px; margin-left:4px;" title="すべて選択（Ctrl+A）"><span class="pending-label">すべて選択</span><span class="pending-label-short">全選択</span></button>
                         <select id="thumbSizeSelect" class="pending-tool" title="サムネイルの大きさ" style="font-size:10px; padding:1px 2px;">
                             <option value="68">小</option>
                             <option value="100" selected>中</option>
@@ -1005,8 +1013,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.11.6-beta';
-        const APP_BUILD = '20260904-1650';
+        const APP_VERSION = '0.11.7-beta';
+        const APP_BUILD = '20260904-1710';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
