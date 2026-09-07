@@ -596,6 +596,37 @@
         .drive-state-sub { font-size: 11px; color: var(--text-sub); margin-top: 2px; word-break: break-all; }
         .drive-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
+        /* 写真の記録 */
+        .stats-grid { display: grid; grid-template-columns: 380px 1fr; gap: 14px; align-items: start; }
+        @media (max-width: 900px) { .stats-grid { grid-template-columns: 1fr; } }
+        .stats-col { min-width: 0; }
+        .stats-h { font-size: 12px; font-weight: bold; margin-bottom: 8px; padding-bottom: 5px;
+                   border-bottom: 2px solid var(--border-color); }
+        .stats-pick { width: 100%; margin-bottom: 10px; padding: 5px; font-size: 11px;
+                      background: var(--bg-control); color: var(--text-main);
+                      border: 1px solid var(--border-color); border-radius: 4px; }
+        .stats-card { background: var(--bg-panel); border: 1px solid var(--border-color);
+                      border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+        .stats-card h5 { margin: 0 0 7px 0; font-size: 11px; color: var(--text-sub); font-weight: bold; }
+        .stats-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .stats-shot { text-align: center; }
+        .stats-shot img { width: 100%; aspect-ratio: 1/1; object-fit: contain;
+                          background: #fff; border: 1px solid var(--border-color); border-radius: 4px; }
+        .stats-shot .cap { font-size: 10px; color: var(--text-sub); margin-top: 3px; line-height: 1.4; }
+        table.stats-t { width: 100%; border-collapse: collapse; font-size: 11px; }
+        table.stats-t th, table.stats-t td { padding: 4px 6px; border-bottom: 1px solid var(--border-sub); text-align: right; }
+        table.stats-t th { color: var(--text-sub); font-weight: normal; }
+        table.stats-t td:first-child, table.stats-t th:first-child { text-align: left; }
+        table.stats-t tr:last-child td { border-bottom: none; }
+        .stats-up   { color: #ff9800; }
+        .stats-down { color: #29b6f6; }
+        .stats-same { color: var(--text-sub); }
+        .stats-note { font-size: 11px; color: var(--text-sub); line-height: 1.7; }
+        .stats-empty { font-size: 12px; color: var(--text-sub); padding: 20px; text-align: center; }
+        .stats-legend { display: flex; gap: 14px; font-size: 10px; color: var(--text-sub); margin-top: 5px; flex-wrap: wrap; }
+        .stats-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+                          margin-right: 4px; vertical-align: -1px; }
+
         /* 表示モードのプリセット */
         .mode-preset-row { display: flex; gap: 8px; }
         .mode-preset, .pending-pos {
@@ -684,6 +715,7 @@
         <div class="header-right-tools">
             <span id="aiStatusBadge" class="ai-status-badge" style="display:none;">🤖 AI連携</span>
             <span id="appVersion" title="表示中のバージョン。修正が反映されない時は Ctrl+Shift+R で再読み込みしてください。">v—</span>
+            <button id="openStatsBtn" class="btn-config-main">📊 写真の記録</button>
             <button id="openConfigBtn" class="btn-config-main">⚙️ システム設定</button>
         </div>
     </div>
@@ -878,6 +910,33 @@
                     </thead>
                     <tbody id="vaultTableBody"></tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 写真の記録 Modal -->
+    <div class="modal-overlay" id="statsModal">
+        <div class="modal-content" style="max-width:1140px; width:96vw;">
+            <div class="modal-header">
+                <h3 style="margin:0;">📊 写真の記録</h3>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span id="statsUpdatedAt" style="font-size:11px; color:var(--text-sub);"></span>
+                    <button id="refreshStatsBtn" class="btn-secondary" style="padding:4px 10px; font-size:11px;">↻ 読み込み直す</button>
+                    <button id="closeStatsBtn" class="btn-danger" style="padding:4px 10px;">✕ 閉じる</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="stats-grid">
+                    <div class="stats-col">
+                        <div class="stats-h">1枚の写真を見る</div>
+                        <select id="statsPhotoPick" class="stats-pick"></select>
+                        <div id="statsCompare"></div>
+                    </div>
+                    <div class="stats-col">
+                        <div class="stats-h">全体の分析</div>
+                        <div id="statsSummary"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1099,8 +1158,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.13.0-beta';
-        const APP_BUILD = '20260904-1900';
+        const APP_VERSION = '0.14.0-beta';
+        const APP_BUILD = '20260907-1140';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1201,6 +1260,7 @@
             showPhotoNav: true,
             showPendingTools: true,
             displayPreset: 'beginner',
+            statsLastLoad: 0,
             driveKind: '',
             gClientId: '',
             autoUploadDrive: false,
@@ -1445,6 +1505,321 @@
         }
         document.querySelectorAll('.config-tab').forEach(t =>
             t.addEventListener('click', () => showConfigTab(t.getAttribute('data-tab'))));
+
+
+        // ============================================================
+        //  写真の記録を見る画面
+        //
+        //  左  : 1枚を選んで、補正前と補正後を並べて見る
+        //  右  : 取り込んだ写真全体の分布と統計
+        //
+        //  開くたびに計算し直すので、常に今の状態が出る。
+        //  1日以上ぶりに開いた時はその旨を出す。
+        // ============================================================
+
+        // 掲載中の商品写真 204枚を実測した値（2026-09-07 調査）。
+        // 自分の写真がこれとどれだけ違うかを見るための物差し。
+        // カタログ画像6枚は写真ではないので除いてある。
+        const SITE_BASELINE = {
+            n: 204, mean: 126.3, sd: 17.5,
+            p10: 103, p25: 115, p50: 125, p75: 139, p90: 152,
+            indoor: { n: 131, mean: 123.6 },
+            outdoor: { n: 73, mean: 131.0 },
+            surveyedAt: '2026-09-07'
+        };
+
+        const statsModal = document.getElementById('statsModal');
+        const statsPhotoPick = document.getElementById('statsPhotoPick');
+
+        function allPhotoRecords() {
+            const out = [];
+            folders.forEach(f => (f.items || []).forEach((it, idx) => {
+                if (it.photoStats) out.push({ folder: f, item: it, idx: idx, st: it.photoStats });
+            }));
+            return out;
+        }
+
+        function fmt(v, d) {
+            if (v === null || v === undefined || !isFinite(v)) return '—';
+            const k = (d === undefined) ? 1 : d;
+            return (Math.round(v * Math.pow(10, k)) / Math.pow(10, k)).toFixed(k);
+        }
+
+        // 補正前と補正後の差を、増えたか減ったかが分かる形にする
+        function deltaCell(before, after, unit, digits) {
+            if (before === null || before === undefined || after === null || after === undefined) return '—';
+            const d = after - before;
+            const u = unit || '';
+            const k = (digits === undefined) ? 1 : digits;
+            if (Math.abs(d) < Math.pow(10, -k) / 2) return '<span class="stats-same">±0' + u + '</span>';
+            const cls = d > 0 ? 'stats-up' : 'stats-down';
+            return '<span class="' + cls + '">' + (d > 0 ? '+' : '') + fmt(d, k) + u + '</span>';
+        }
+
+        // 現場の光量を、数字だけでなく言葉でも出す
+        function evWord(ev) {
+            if (ev === null || ev === undefined) return '';
+            if (ev >= 13) return '（屋外・晴れ）';
+            if (ev >= 10) return '（明るい）';
+            if (ev >= 7)  return '（ふつう）';
+            if (ev >= 5)  return '（暗め）';
+            return '（かなり暗い）';
+        }
+
+        function renderStatsCompare(rec) {
+            const box = document.getElementById('statsCompare');
+            if (!rec) { box.innerHTML = '<div class="stats-empty">写真がありません。</div>'; return; }
+            const it = rec.item, st = rec.st, out = it.outStats || null;
+            const b0 = st.bright || null;
+            const b1 = out && out.bright ? out.bright : null;
+            const ex = st.exif || {};
+
+            const beforeUrl = it.thumbUrl || it._objUrl || '';
+            let afterUrl = '', afterCap = '未確定';
+            if (it.editedBlob) {
+                if (!it._statsOutUrl) it._statsOutUrl = URL.createObjectURL(it.editedBlob);
+                afterUrl = it._statsOutUrl;
+                afterCap = OUT_DIM + '×' + OUT_DIM + ' / ' + formatSize(it.editedBlob.size);
+            }
+
+            let h = '';
+            h += '<div class="stats-card"><div class="stats-pair">';
+            h += '<div class="stats-shot"><img src="' + beforeUrl + '" alt="補正前">'
+               + '<div class="cap"><b>補正前</b><br>' + (st.srcW || '?') + '×' + (st.srcH || '?')
+               + (st.srcBytes ? ' / ' + formatSize(st.srcBytes) : '') + '</div></div>';
+            h += '<div class="stats-shot">'
+               + (afterUrl ? '<img src="' + afterUrl + '" alt="補正後">'
+                           : '<div style="width:100%;aspect-ratio:1/1;background:var(--bg-control);border:1px dashed var(--border-color);border-radius:4px;"></div>')
+               + '<div class="cap"><b>補正後</b><br>' + afterCap + '</div></div>';
+            h += '</div></div>';
+
+            h += '<div class="stats-card"><h5>数値の違い</h5><table class="stats-t">'
+               + '<tr><th>項目</th><th>補正前</th><th>補正後</th><th>差</th></tr>';
+            const rows = [
+                ['明るさ',   b0 ? b0.mean : null,    b1 ? b1.mean : null,    '',  1],
+                ['ばらつき', b0 ? b0.sd : null,      b1 ? b1.sd : null,      '',  1],
+                ['白飛び',   b0 ? b0.blown : null,   b1 ? b1.blown : null,   '%', 1],
+                ['黒つぶれ', b0 ? b0.crushed : null, b1 ? b1.crushed : null, '%', 1],
+                ['色の濃さ', b0 ? b0.sat : null,     b1 ? b1.sat : null,     '',  1]
+            ];
+            rows.forEach(r => {
+                h += '<tr><td>' + r[0] + '</td><td>' + fmt(r[1], r[4]) + r[3] + '</td><td>'
+                   + fmt(r[2], r[4]) + r[3] + '</td><td>' + deltaCell(r[1], r[2], r[3], r[4]) + '</td></tr>';
+            });
+            h += '</table>';
+            if (!b1) h += '<div class="stats-note" style="margin-top:6px;">まだ確定していないので、補正後の数値はありません。</div>';
+            h += '</div>';
+
+            h += '<div class="stats-card"><h5>撮影したときの記録</h5><table class="stats-t">';
+            const shotRows = [
+                ['機種', (ex.make || '') + ' ' + (ex.model || '') ],
+                ['撮影日時', ex.shotAt || '—'],
+                ['ISO感度', ex.iso !== undefined ? ex.iso : '—'],
+                ['シャッター', ex.exposureTime ? ('1/' + Math.round(1 / ex.exposureTime) + '秒') : '—'],
+                ['絞り', ex.fNumber ? ('f/' + ex.fNumber) : '—'],
+                ['現場の光量', (st.ev100 !== undefined ? fmt(st.ev100, 1) + ' ' + evWord(st.ev100) : '—')],
+                ['種別', st.kind === 'catalog' ? 'カタログ画像（写真ではない）'
+                        : st.kind === 'photo' ? '写真' : '不明']
+            ];
+            shotRows.forEach(r => {
+                const v = (r[1] === '' || r[1] === ' ' || r[1] === null || r[1] === undefined) ? '—' : r[1];
+                h += '<tr><td>' + r[0] + '</td><td colspan="3">' + v + '</td></tr>';
+            });
+            h += '</table>';
+            if (st.ev100 === undefined) h += '<div class="stats-note" style="margin-top:6px;">'
+                + 'この写真には撮影条件（ISO・露出）が残っていません。'
+                + '一度加工された画像を取り込むと、元の記録は失われます。</div>';
+            h += '</div>';
+            box.innerHTML = h;
+        }
+
+        // 明るさの分布を棒グラフで描く
+        function drawStatsHistogram(cv, values, base) {
+            const W = cv.width, H = cv.height;
+            const g = cv.getContext('2d');
+            const css = getComputedStyle(document.body);
+            const sub = (css.getPropertyValue('--text-sub') || '#888').trim();
+            const line = (css.getPropertyValue('--border-color') || '#555').trim();
+            g.clearRect(0, 0, W, H);
+
+            const LO = 60, HI = 200, BINS = 28;      // 実測の範囲をほぼ覆う
+            const pad = { l: 26, r: 8, t: 8, b: 20 };
+            const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+            const bins = new Array(BINS).fill(0);
+            values.forEach(v => {
+                let i = Math.floor((v - LO) / (HI - LO) * BINS);
+                i = Math.max(0, Math.min(BINS - 1, i));
+                bins[i]++;
+            });
+            const mx = Math.max(1, ...bins);
+            const x = v => pad.l + (Math.max(LO, Math.min(HI, v)) - LO) / (HI - LO) * pw;
+
+            g.strokeStyle = line; g.lineWidth = 1;
+            g.beginPath(); g.moveTo(pad.l, pad.t + ph); g.lineTo(pad.l + pw, pad.t + ph); g.stroke();
+
+            const bw = pw / BINS;
+            g.fillStyle = '#4caf50';
+            bins.forEach((c, i) => {
+                if (!c) return;
+                const bh = c / mx * ph;
+                g.fillRect(pad.l + i * bw + 0.5, pad.t + ph - bh, Math.max(1, bw - 1), bh);
+            });
+
+            // 掲載中の写真の中央値・p10・p90 を重ねる
+            if (base) {
+                g.strokeStyle = '#ff9800'; g.lineWidth = 2;
+                g.beginPath(); g.moveTo(x(base.p50), pad.t); g.lineTo(x(base.p50), pad.t + ph); g.stroke();
+                g.strokeStyle = '#ff9800'; g.lineWidth = 1; g.setLineDash([3, 3]);
+                [base.p10, base.p90].forEach(v => {
+                    g.beginPath(); g.moveTo(x(v), pad.t); g.lineTo(x(v), pad.t + ph); g.stroke();
+                });
+                g.setLineDash([]);
+            }
+
+            g.fillStyle = sub; g.font = '9px sans-serif'; g.textAlign = 'center';
+            [60, 90, 120, 150, 180].forEach(v => g.fillText(String(v), x(v), H - 6));
+            g.textAlign = 'right';
+            g.fillText(String(mx), pad.l - 3, pad.t + 8);
+            g.fillText('0', pad.l - 3, pad.t + ph);
+            g.textAlign = 'left';
+            g.fillText('暗い', pad.l, H - 6 - 11);
+            g.textAlign = 'right';
+            g.fillText('明るい', pad.l + pw, H - 6 - 11);
+        }
+
+        function quantiles(sorted, p) {
+            if (!sorted.length) return null;
+            return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+        }
+
+        function renderStatsSummary() {
+            const box = document.getElementById('statsSummary');
+            const recs = allPhotoRecords();
+            const photos = recs.filter(r => r.st.kind !== 'catalog' && r.st.bright);
+            const catalogs = recs.filter(r => r.st.kind === 'catalog');
+
+            if (!recs.length) {
+                box.innerHTML = '<div class="stats-empty">まだ記録がありません。<br>'
+                    + '写真を取り込むと、明るさと撮影条件が自動で記録されます。</div>';
+                return;
+            }
+
+            const vals = photos.map(r => r.st.bright.mean).sort((a, b) => a - b);
+            const n = vals.length;
+            const mean = n ? vals.reduce((a, b) => a + b, 0) / n : 0;
+            const sd = n ? Math.sqrt(vals.reduce((a, b) => a + (b - mean) * (b - mean), 0) / n) : 0;
+
+            const evs = photos.filter(r => r.st.ev100 !== undefined).map(r => r.st.ev100);
+            const evMean = evs.length ? evs.reduce((a, b) => a + b, 0) / evs.length : null;
+            const hiIso = photos.filter(r => r.st.exif && r.st.exif.iso >= 400).length;
+            const blown = photos.filter(r => r.st.bright.blown >= 1).length;
+            const noShotInfo = recs.filter(r => r.st.ev100 === undefined).length;
+            const done = recs.filter(r => r.item.outStats && r.item.outStats.bright).length;
+
+            let h = '';
+            h += '<div class="stats-card"><h5>この画面は何を表しているか</h5><div class="stats-note">'
+               + '取り込んだ写真の明るさを1枚ずつ測って集めたものです。'
+               + '<b>写真そのものは変えていません。</b>数字を残しているだけです。<br>'
+               + 'オレンジの線は、掲載中の商品写真 ' + SITE_BASELINE.n + ' 枚を実測した値'
+               + '（' + SITE_BASELINE.surveyedAt + ' 調査）。'
+               + '自分の写真がそこからどれだけ離れているかを見るための物差しです。'
+               + '</div></div>';
+
+            h += '<div class="stats-card"><h5>明るさの分布</h5>'
+               + '<canvas id="statsHist" width="620" height="170" style="width:100%; height:auto;"></canvas>'
+               + '<div class="stats-legend">'
+               + '<span><i style="background:#4caf50;"></i>あなたの写真 ' + n + ' 枚</span>'
+               + '<span><i style="background:#ff9800;"></i>掲載中の中央値 ' + SITE_BASELINE.p50 + '</span>'
+               + '<span><i style="background:#ff9800; opacity:.5;"></i>掲載中の p10 / p90</span>'
+               + '</div>'
+               + '<div class="stats-note" style="margin-top:6px;">'
+               + '横軸は明るさ（0が真っ黒、255が真っ白）。縦の棒は、その明るさの写真が何枚あるか。'
+               + '棒がオレンジの線の左に寄っていれば、掲載中の写真より暗いということです。'
+               + '</div></div>';
+
+            const cmp = [
+                ['枚数',     n,                     SITE_BASELINE.n,   0],
+                ['平均',     mean,                  SITE_BASELINE.mean, 1],
+                ['中央値',   quantiles(vals, .50),  SITE_BASELINE.p50, 0],
+                ['ばらつき', sd,                    SITE_BASELINE.sd,  1],
+                ['下位10%',  quantiles(vals, .10),  SITE_BASELINE.p10, 0],
+                ['上位10%',  quantiles(vals, .90),  SITE_BASELINE.p90, 0]
+            ];
+            h += '<div class="stats-card"><h5>統計の比較</h5><table class="stats-t">'
+               + '<tr><th>項目</th><th>あなたの写真</th><th>掲載中の写真</th><th>差</th></tr>';
+            cmp.forEach((r, i) => {
+                const d = (i === 0) ? '—' : deltaCell(r[2], r[1], '', r[3]);
+                h += '<tr><td>' + r[0] + '</td><td>' + fmt(r[1], r[3]) + '</td><td>'
+                   + fmt(r[2], r[3]) + '</td><td>' + d + '</td></tr>';
+            });
+            h += '</table><div class="stats-note" style="margin-top:6px;">'
+               + '差の欄は、掲載中の写真を基準にした場合の増減です。'
+               + '<span class="stats-up">オレンジ</span>は明るい側、'
+               + '<span class="stats-down">青</span>は暗い側。'
+               + '</div></div>';
+
+            h += '<div class="stats-card"><h5>撮影の状態</h5><table class="stats-t">'
+               + '<tr><td>現場の光量（平均）</td><td colspan="3">'
+               + (evMean !== null ? fmt(evMean, 1) + ' ' + evWord(evMean) : '記録なし') + '</td></tr>'
+               + '<tr><td>光が足りなかった写真</td><td colspan="3">' + hiIso + ' 枚'
+               + (n ? '（' + fmt(hiIso / n * 100, 0) + '%）' : '') + ' <span style="color:var(--text-sub);">ISO400以上</span></td></tr>'
+               + '<tr><td>白飛びが1%を超えた写真</td><td colspan="3">' + blown + ' 枚</td></tr>'
+               + '<tr><td>カタログ画像</td><td colspan="3">' + catalogs.length + ' 枚 <span style="color:var(--text-sub);">写真ではないので集計から除外</span></td></tr>'
+               + '<tr><td>撮影条件が読めない写真</td><td colspan="3">' + noShotInfo + ' 枚'
+               + ' <span style="color:var(--text-sub);">ISO・露出が残っていない</span></td></tr>'
+               + '<tr><td>確定済み</td><td colspan="3">' + done + ' / ' + recs.length + ' 枚</td></tr>'
+               + '</table><div class="stats-note" style="margin-top:6px;">'
+               + '「現場の光量」はカメラの露出設定から求めた、その場にどれだけ光があったかの目安です。'
+               + '商品の色とは関係なく、撮影環境だけを表します。'
+               + '</div></div>';
+
+            box.innerHTML = h;
+            const cv = document.getElementById('statsHist');
+            if (cv) drawStatsHistogram(cv, vals, SITE_BASELINE);
+        }
+
+        function refreshStatsModal(keepPick) {
+            const recs = allPhotoRecords();
+            const prev = keepPick ? statsPhotoPick.value : null;
+            statsPhotoPick.innerHTML = '';
+            recs.forEach((r, i) => {
+                const o = document.createElement('option');
+                o.value = String(i);
+                o.textContent = (r.folder.name || '') + ' / '
+                    + (r.item.customName || r.item.fileName || ('写真' + (r.idx + 1)))
+                    + (r.item.isDone ? '  ✓確定' : '');
+                statsPhotoPick.appendChild(o);
+            });
+            let pick = 0;
+            if (prev !== null && prev !== '' && recs[Number(prev)]) pick = Number(prev);
+            statsPhotoPick.value = String(pick);
+            renderStatsCompare(recs[pick] || null);
+            renderStatsSummary();
+
+            const now = Date.now();
+            const last = uiConfig.statsLastLoad || 0;
+            const el = document.getElementById('statsUpdatedAt');
+            const t = new Date(now);
+            const hhmm = ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2);
+            let label = '最終更新 ' + hhmm;
+            if (last && now - last > 24 * 60 * 60 * 1000) label += '（前回から1日以上経っています）';
+            el.innerText = label;
+            uiConfig.statsLastLoad = now;
+            saveConfig();
+        }
+
+        statsPhotoPick.addEventListener('change', () => {
+            const recs = allPhotoRecords();
+            renderStatsCompare(recs[Number(statsPhotoPick.value)] || null);
+        });
+        document.getElementById('openStatsBtn').addEventListener('click', () => {
+            statsModal.style.display = 'flex';
+            refreshStatsModal(false);
+        });
+        document.getElementById('refreshStatsBtn').addEventListener('click', () => refreshStatsModal(true));
+        document.getElementById('closeStatsBtn').addEventListener('click', () => {
+            statsModal.style.display = 'none';
+        });
 
         openConfigBtn.addEventListener('click', () => {
             renderKeymapUI();
@@ -2056,6 +2431,205 @@
             status.innerText = "⚠ 保管庫に保存できていません。他のタブを閉じて再読み込みしてください（加工と書き出しは可能です）";
         }
 
+        // ============================================================
+        //  写真の記録（内部データ・画面には出さない）
+        //
+        //  なぜ取り込みの瞬間に測るのか:
+        //    撮影条件(ISO・シャッター・絞り)は EXIF にしか無く、
+        //    canvas に載せた時点で失われる。書き出した後の画像から
+        //    後追いで取ることはできないので、ここで取るしかない。
+        //
+        //  何のために残すのか:
+        //    「暗い写真は本当に売れていないのか」を後から数字で確かめるため。
+        //    ここでは良し悪しの判断はせず、事実だけを残す。
+        //    検品する人の操作は何も変わらない。
+        // ============================================================
+        const PHOTO_STATS_VERSION = 1;
+
+        // 読み取るタグ。必要なものだけに絞ってある。
+        const EXIF_IFD0 = { 0x010F: 'make', 0x0110: 'model', 0x0112: 'orientation', 0x0131: 'software' };
+        const EXIF_SUB  = {
+            0x829A: 'exposureTime', 0x829D: 'fNumber', 0x8827: 'iso',
+            0x9003: 'shotAt', 0x9203: 'brightnessValue', 0x9207: 'meteringMode',
+            0x9209: 'flash', 0x920A: 'focalLength'
+        };
+        const EXIF_TYPE_BYTES = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 9: 4, 10: 8 };
+
+        // JPEG の APP1 セグメントから撮影条件を読む。
+        // 外部ライブラリを足さずに済むよう、必要な範囲だけ自前で解いている。
+        function parseExifBytes(buf) {
+            const dv = new DataView(buf);
+            if (dv.byteLength < 4 || dv.getUint16(0) !== 0xFFD8) return null;   // JPEG ではない
+
+            let off = 2, app1 = -1;
+            while (off + 4 <= dv.byteLength) {
+                if (dv.getUint8(off) !== 0xFF) break;
+                const marker = dv.getUint8(off + 1);
+                if (marker === 0xDA || marker === 0xD9) break;   // 画像本体に入ったら終わり
+                const len = dv.getUint16(off + 2);
+                if (len < 2) break;
+                if (marker === 0xE1 && off + 10 <= dv.byteLength) {
+                    let sig = '';
+                    for (let i = 0; i < 4; i++) sig += String.fromCharCode(dv.getUint8(off + 4 + i));
+                    if (sig === 'Exif') { app1 = off + 10; break; }
+                }
+                off += 2 + len;
+            }
+            if (app1 < 0 || app1 + 8 > dv.byteLength) return null;
+
+            const bo = dv.getUint16(app1);
+            const le = (bo === 0x4949);                 // II ならリトルエンディアン
+            if (!le && bo !== 0x4D4D) return null;
+            const u16 = o => dv.getUint16(app1 + o, le);
+            const u32 = o => dv.getUint32(app1 + o, le);
+            const i32 = o => dv.getInt32(app1 + o, le);
+            if (u16(2) !== 0x002A) return null;
+
+            const out = {};
+            // 戻り値は ExifIFD への位置。0 なら無し。
+            const readIfd = (ifdOff, map) => {
+                if (ifdOff <= 0 || app1 + ifdOff + 2 > dv.byteLength) return 0;
+                const n = u16(ifdOff);
+                let sub = 0;
+                for (let i = 0; i < n; i++) {
+                    const e = ifdOff + 2 + i * 12;
+                    if (app1 + e + 12 > dv.byteLength) break;
+                    const tag = u16(e), type = u16(e + 2), cnt = u32(e + 4);
+                    if (tag === 0x8769) { sub = u32(e + 8); continue; }
+                    const name = map[tag];
+                    if (!name) continue;
+                    const unit = EXIF_TYPE_BYTES[type];
+                    if (!unit || cnt <= 0 || cnt > 0xFFFF) continue;
+                    const total = unit * cnt;
+                    // 4バイトに収まる値はその場に、収まらない値は別の場所に置かれている
+                    const at = (total <= 4) ? (e + 8) : u32(e + 8);
+                    if (at < 0 || app1 + at + total > dv.byteLength) continue;
+                    let v = null;
+                    if (type === 2) {
+                        let str = '';
+                        for (let k = 0; k < cnt; k++) {
+                            const ch = dv.getUint8(app1 + at + k);
+                            if (ch === 0) break;
+                            str += String.fromCharCode(ch);
+                        }
+                        v = str.trim();
+                        if (v === '') v = null;
+                    } else if (type === 3) { v = u16(at); }
+                    else if (type === 4)   { v = u32(at); }
+                    else if (type === 9)   { v = i32(at); }
+                    else if (type === 5)   { const a = u32(at), b = u32(at + 4); v = b ? a / b : null; }
+                    else if (type === 10)  { const a = i32(at), b = i32(at + 4); v = b ? a / b : null; }
+                    if (v !== null) out[name] = v;
+                }
+                return sub;
+            };
+            const sub = readIfd(u32(4), EXIF_IFD0);
+            if (sub) readIfd(sub, EXIF_SUB);
+            return Object.keys(out).length ? out : null;
+        }
+
+        async function readExifFromBlob(blob) {
+            if (!blob || typeof blob.slice !== 'function') return null;
+            try {
+                // EXIF は先頭付近にある。写真は数MBあるので頭だけ読む。
+                const head = await blob.slice(0, 256 * 1024).arrayBuffer();
+                return parseExifBytes(head);
+            } catch (e) { console.warn('EXIF の読み取りに失敗:', e); return null; }
+        }
+
+        // 現場にどれだけ光があったかを ISO100 換算で求める。
+        // 商品の色とは無関係な、撮影環境そのものの指標になる。
+        // 数字が大きいほど明るい現場。屋外の晴天で 13 前後、暗い倉庫で 5 前後。
+        function computeEv100(x) {
+            if (!x) return null;
+            const t = x.exposureTime, N = x.fNumber, iso = x.iso;
+            if (!t || !N || !iso || t <= 0 || N <= 0 || iso <= 0) return null;
+            const ev = Math.log2((N * N) / t) - Math.log2(iso / 100);
+            if (!isFinite(ev)) return null;
+            return Math.round(ev * 10) / 10;
+        }
+
+        // 明るさを測る。判定用なので小さく描き直して数える（速度のため）。
+        const STATS_SAMPLE = 160;
+        function measureBrightness(src, w, h) {
+            if (!src || !w || !h) return null;
+            try {
+                const sc = Math.min(STATS_SAMPLE / w, STATS_SAMPLE / h, 1);
+                const cw = Math.max(1, Math.round(w * sc));
+                const ch = Math.max(1, Math.round(h * sc));
+                const c = document.createElement('canvas');
+                c.width = cw; c.height = ch;
+                const g = c.getContext('2d', { willReadFrequently: true });
+                g.drawImage(src, 0, 0, cw, ch);
+                const d = g.getImageData(0, 0, cw, ch).data;
+
+                const hist = new Uint32Array(256);
+                const n = cw * ch;
+                let satSum = 0, white = 0;
+                for (let i = 0; i < d.length; i += 4) {
+                    const R = d[i], G = d[i + 1], B = d[i + 2];
+                    hist[(R * 299 + G * 587 + B * 114) / 1000 | 0]++;
+                    const mx = R > G ? (R > B ? R : B) : (G > B ? G : B);
+                    const mn = R < G ? (R < B ? R : B) : (G < B ? G : B);
+                    satSum += mx - mn;
+                    if (mn >= 238) white++;
+                }
+                let sum = 0;
+                for (let i = 0; i < 256; i++) sum += i * hist[i];
+                const mean = sum / n;
+                let varSum = 0;
+                for (let i = 0; i < 256; i++) varSum += (i - mean) * (i - mean) * hist[i];
+
+                let acc = 0, p10 = -1, p50 = -1, p90 = -1;
+                for (let i = 0; i < 256; i++) {
+                    acc += hist[i];
+                    if (p10 < 0 && acc >= n * 0.10) p10 = i;
+                    if (p50 < 0 && acc >= n * 0.50) p50 = i;
+                    if (p90 < 0 && acc >= n * 0.90) { p90 = i; break; }
+                }
+                let blown = 0, crushed = 0;
+                for (let i = 250; i < 256; i++) blown += hist[i];
+                for (let i = 0; i < 6; i++) crushed += hist[i];
+                const r1 = v => Math.round(v * 10) / 10;
+                return {
+                    mean: r1(mean), sd: r1(Math.sqrt(varSum / n)),
+                    p10: p10 < 0 ? 0 : p10, p50: p50 < 0 ? 0 : p50, p90: p90 < 0 ? 255 : p90,
+                    blown: r1(blown / n * 100), crushed: r1(crushed / n * 100),
+                    sat: r1(satSum / n), white: r1(white / n * 100)
+                };
+            } catch (e) { console.warn('明るさの測定に失敗:', e); return null; }
+        }
+
+        // カタログ画像（紙もの）は写真ではないので区別しておく。
+        // 掲載画像 210 枚を実測したところ 3% がこれだった。
+        // 写真と同じ扱いで集計すると平均が大きく狂う。
+        function classifyPhotoKind(b) {
+            if (!b) return 'unknown';
+            if (b.white >= 18 && b.sat < 70) return 'catalog';
+            return 'photo';
+        }
+
+        async function buildPhotoRecord(item) {
+            if (!item || !item.img) return null;
+            const w = item.img.naturalWidth || item.img.width;
+            const h = item.img.naturalHeight || item.img.height;
+            const rec = {
+                v: PHOTO_STATS_VERSION,
+                at: new Date().toISOString(),
+                srcW: w, srcH: h,
+                srcBytes: item.file ? item.file.size : null
+            };
+            const b = measureBrightness(item.img, w, h);
+            if (b) { rec.bright = b; rec.kind = classifyPhotoKind(b); }
+            const ex = await readExifFromBlob(item.file);
+            if (ex) {
+                rec.exif = ex;
+                const ev = computeEv100(ex);
+                if (ev !== null) rec.ev100 = ev;
+            }
+            return rec;
+        }
+
         function saveToDB() {
             updateItemNames();
             if (!db) { warnNoDbOnce(); return; }
@@ -2086,6 +2660,8 @@
                         imageScale: i.imageScale || 1.0,
                         offsetX: i.offsetX || 0,
                         offsetY: i.offsetY || 0,
+                        photoStats: i.photoStats || null,
+                        outStats: i.outStats || null,
                         isDone: !!i.isDone
                     }))
                 })),
@@ -2195,6 +2771,8 @@
                 offsetX: meta.offsetX || 0,
                 offsetY: meta.offsetY || 0,
                 editedBlob: rec.edited || null,
+                photoStats: meta.photoStats || null,
+                outStats: meta.outStats || null,
                 isDone: !!meta.isDone
             };
 
@@ -2735,6 +3313,11 @@
                         isDone: false
                     };
                     folder.items.push(item);
+
+                    // 明るさと撮影条件を残す。失敗しても取り込み自体は止めない。
+                    try { item.photoStats = await buildPhotoRecord(item); }
+                    catch (e) { console.warn('記録の作成に失敗:', file.name, e); }
+
                     persistPhoto(item);
 
                     if (!firstLoadedImg) firstLoadedImg = loaded.img;
@@ -6502,6 +7085,30 @@
 
             confirmedItem.editedBlob = bestBlob;
             confirmedItem.isDone = true;
+
+            // 書き出した結果も残す。元の写真とどれだけ違うかを後から追える。
+            // 書き出したJPEGを読み直して測る。圧縮の影響まで含めた実際の値になる。
+            let outBright = null;
+            if (bestBlob) {
+                try {
+                    const shot = await blobToImage(bestBlob);
+                    outBright = measureBrightness(shot.img, OUT_DIM, OUT_DIM);
+                    URL.revokeObjectURL(shot.url);
+                } catch (e) { console.warn('書き出し後の測定に失敗:', e); }
+            }
+            confirmedItem.outStats = {
+                v: PHOTO_STATS_VERSION,
+                at: new Date().toISOString(),
+                bytes: bestBlob ? bestBlob.size : 0,
+                dim: OUT_DIM,
+                bright: outBright,
+                touched: !!(confirmedItem.hasMaskEdits
+                    || confirmedItem.vignetteShape
+                    || (confirmedItem.arrows && confirmedItem.arrows.length)
+                    || confirmedItem.imageAngle
+                    || (confirmedItem.imageScale && confirmedItem.imageScale !== 1)
+                    || confirmedItem.offsetX || confirmedItem.offsetY)
+            };
 
             // 確定した画像を必ずDBへ保存する。
             // v1 はここで保存しておらず、開き直すと「完了済み」表示なのに
