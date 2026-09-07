@@ -927,6 +927,7 @@
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span id="statsUpdatedAt" style="font-size:11px; color:var(--text-sub);"></span>
                     <button id="refreshStatsBtn" class="btn-secondary" style="padding:4px 10px; font-size:11px;">↻ 読み込み直す</button>
+                    <button id="exportStatsBtn" class="btn-secondary" style="padding:4px 10px; font-size:11px;" title="記録を1行1件のJSON（NDJSON）で書き出します。D1・S3・BigQuery のどれにもそのまま読み込めます。">⬇ 記録を書き出す</button>
                     <button id="closeStatsBtn" class="btn-danger" style="padding:4px 10px;">✕ 閉じる</button>
                 </div>
             </div>
@@ -1163,8 +1164,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.15.0-beta';
-        const APP_BUILD = '20260907-1215';
+        const APP_VERSION = '0.16.0-beta';
+        const APP_BUILD = '20260907-1305';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1896,6 +1897,124 @@
             uiConfig.statsLastLoad = now;
             saveConfig();
         }
+
+
+        // ============================================================
+        //  記録の書き出し（NDJSON）
+        //
+        //  1行に1件のJSONを並べた形式。表計算のように列が固定なので、
+        //  D1 でも S3+Athena でも BigQuery でも、そのまま読み込める。
+        //
+        //  入れ子は作らない。SQL から扱いやすいように平らにしてある。
+        // ============================================================
+        const RECORD_SCHEMA_VERSION = 1;
+
+        // 260907 -> 2026-09-07
+        function ymdToDate(ymd) {
+            if (!ymd || ymd.length !== 6) return null;
+            return '20' + ymd.slice(0, 2) + '-' + ymd.slice(2, 4) + '-' + ymd.slice(4, 6);
+        }
+        // EXIF の "2023:05:24 10:33:32" -> "2023-05-24T10:33:32"
+        function exifDateToIso(v) {
+            if (!v || typeof v !== 'string') return null;
+            const m = v.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+            if (!m) return null;
+            return m[1] + '-' + m[2] + '-' + m[3] + 'T' + m[4] + ':' + m[5] + ':' + m[6];
+        }
+
+        function buildExportRows() {
+            const rows = [];
+            const now = new Date().toISOString();
+            folders.forEach(folder => {
+                const folderName = String(folder.name || '').replace(/^[^A-Za-z0-9]+/, '').trim();
+                const isCode = ITEM_CODE_RE.test(folderName);
+                (folder.items || []).forEach((it, idx) => {
+                    const st = it.photoStats || {};
+                    const ex = st.exif || {};
+                    const b = st.bright || {};
+                    const o = it.outStats || {};
+                    const ob = o.bright || {};
+                    rows.push({
+                        schema_version: RECORD_SCHEMA_VERSION,
+                        photo_id: it.id || null,
+                        // --- 商品コードから分解した情報 ---
+                        item_code: isCode ? folderName : null,
+                        center_code: isCode ? folderName.slice(0, 3) : null,
+                        category_code: isCode ? folderName.slice(3, 5) : null,
+                        shot_date: isCode ? ymdToDate(folderName.slice(6, 12)) : null,
+                        serial: isCode ? Number(folderName.slice(13, 16)) : null,
+                        photo_no: idx + 1,
+                        photo_name: it.customName || null,
+                        folder_name: folder.name || null,
+                        file_name: it.fileName || null,
+                        // --- 撮影したときの状態 ---
+                        captured_at: exifDateToIso(ex.shotAt),
+                        camera_make: ex.make || null,
+                        camera_model: ex.model || null,
+                        iso: ex.iso !== undefined ? ex.iso : null,
+                        exposure_time: ex.exposureTime !== undefined ? ex.exposureTime : null,
+                        f_number: ex.fNumber !== undefined ? ex.fNumber : null,
+                        focal_length: ex.focalLength !== undefined ? ex.focalLength : null,
+                        brightness_value: ex.brightnessValue !== undefined ? ex.brightnessValue : null,
+                        metering_mode: ex.meteringMode !== undefined ? ex.meteringMode : null,
+                        flash: ex.flash !== undefined ? ex.flash : null,
+                        ev100: st.ev100 !== undefined ? st.ev100 : null,
+                        // --- 補正前 ---
+                        src_w: st.srcW || null,
+                        src_h: st.srcH || null,
+                        src_bytes: st.srcBytes || null,
+                        kind: st.kind || null,
+                        b_mean: b.mean !== undefined ? b.mean : null,
+                        b_sd: b.sd !== undefined ? b.sd : null,
+                        b_p10: b.p10 !== undefined ? b.p10 : null,
+                        b_p50: b.p50 !== undefined ? b.p50 : null,
+                        b_p90: b.p90 !== undefined ? b.p90 : null,
+                        b_blown: b.blown !== undefined ? b.blown : null,
+                        b_crushed: b.crushed !== undefined ? b.crushed : null,
+                        b_sat: b.sat !== undefined ? b.sat : null,
+                        b_white: b.white !== undefined ? b.white : null,
+                        // --- 補正後（確定して書き出したもの） ---
+                        out_bytes: o.bytes || null,
+                        out_dim: o.dim || null,
+                        out_mean: ob.mean !== undefined ? ob.mean : null,
+                        out_sd: ob.sd !== undefined ? ob.sd : null,
+                        out_blown: ob.blown !== undefined ? ob.blown : null,
+                        out_crushed: ob.crushed !== undefined ? ob.crushed : null,
+                        touched: (o.touched === undefined ? null : o.touched),
+                        confirmed_at: o.at || null,
+                        is_done: !!it.isDone,
+                        // --- 記録そのものの情報 ---
+                        measured_at: st.at || null,
+                        backfilled: !!st.backfilled,
+                        app_version: APP_VERSION,
+                        exported_at: now
+                    });
+                });
+            });
+            return rows;
+        }
+
+        function exportRecordsNdjson() {
+            const rows = buildExportRows();
+            if (!rows.length) { alert('書き出せる記録がありません。'); return; }
+            // 1行1件。改行で区切るだけなので、追記でつなげてもよい。
+            const text = rows.map(r => JSON.stringify(r)).join('\n') + '\n';
+            const blob = new Blob([text], { type: 'application/x-ndjson' });
+            const d = new Date();
+            const p2 = v => ('0' + v).slice(-2);
+            const stamp = d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate())
+                        + '-' + p2(d.getHours()) + p2(d.getMinutes());
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'photo_records_' + stamp + '.ndjson';
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+
+            const measured = rows.filter(r => r.b_mean !== null).length;
+            status.innerText = '記録 ' + rows.length + ' 件を書き出しました（測定済み ' + measured + ' 件）。';
+        }
+
+        document.getElementById('exportStatsBtn').addEventListener('click', exportRecordsNdjson);
 
         statsPhotoPick.addEventListener('change', () => {
             const recs = allPhotoRecords();
