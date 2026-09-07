@@ -1158,8 +1158,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.14.0-beta';
-        const APP_BUILD = '20260907-1140';
+        const APP_VERSION = '0.14.1-beta';
+        const APP_BUILD = '20260907-1130';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1531,12 +1531,68 @@
         const statsModal = document.getElementById('statsModal');
         const statsPhotoPick = document.getElementById('statsPhotoPick');
 
+        // 取り込んだ写真は全部並べる。
+        // 記録の有無で一覧から外すと「写真が消えた」ように見えてしまう。
         function allPhotoRecords() {
             const out = [];
             folders.forEach(f => (f.items || []).forEach((it, idx) => {
-                if (it.photoStats) out.push({ folder: f, item: it, idx: idx, st: it.photoStats });
+                out.push({ folder: f, item: it, idx: idx, st: it.photoStats || null });
             }));
             return out;
+        }
+
+        // この機能より前に取り込んだ写真には記録が無い。
+        // 元画像は保管庫にそのまま残っているので、開いた時にさかのぼって測る。
+        // 写真には一切手を触れず、数値を足すだけ。
+        async function backfillPhotoStats(onProgress) {
+            const targets = [];
+            folders.forEach(f => (f.items || []).forEach(it => {
+                const needStats = !it.photoStats;
+                const needOut = !!it.isDone && (!it.outStats || !it.outStats.bright);
+                if (needStats || needOut) targets.push({ it: it, needStats: needStats, needOut: needOut });
+            }));
+            if (!targets.length) return 0;
+
+            let done = 0;
+            for (const t of targets) {
+                const it = t.it;
+                try {
+                    if (t.needStats) {
+                        let img = it.img, file = it.file;
+                        if (!img || !file) {
+                            const rec = await readBlobRecord(it.id);
+                            if (rec && rec.original) {
+                                file = file || rec.original;
+                                if (!img) { const l = await blobToImage(rec.original); img = l.img; }
+                            }
+                        }
+                        if (img) {
+                            it.photoStats = await buildPhotoRecord({ img: img, file: file });
+                            if (it.photoStats) it.photoStats.backfilled = true;
+                        }
+                    }
+                    if (t.needOut) {
+                        let blob = it.editedBlob;
+                        if (!blob) {
+                            const rec = await readBlobRecord(it.id);
+                            blob = rec ? rec.edited : null;
+                        }
+                        if (blob) {
+                            const shot = await blobToImage(blob);
+                            it.outStats = Object.assign(
+                                { v: PHOTO_STATS_VERSION, at: new Date().toISOString(), touched: null },
+                                it.outStats || {},
+                                { bytes: blob.size, dim: OUT_DIM,
+                                  bright: measureBrightness(shot.img, OUT_DIM, OUT_DIM) });
+                            URL.revokeObjectURL(shot.url);
+                        }
+                    }
+                } catch (e) { console.warn('さかのぼり測定に失敗:', it.customName, e); }
+                done++;
+                if (onProgress) onProgress(done, targets.length);
+            }
+            saveToDB();
+            return done;
         }
 
         function fmt(v, d) {
@@ -1569,12 +1625,13 @@
         function renderStatsCompare(rec) {
             const box = document.getElementById('statsCompare');
             if (!rec) { box.innerHTML = '<div class="stats-empty">写真がありません。</div>'; return; }
-            const it = rec.item, st = rec.st, out = it.outStats || null;
+            const it = rec.item, st = rec.st || {}, out = it.outStats || null;
             const b0 = st.bright || null;
             const b1 = out && out.bright ? out.bright : null;
             const ex = st.exif || {};
 
             const beforeUrl = it.thumbUrl || it._objUrl || '';
+            const measured = !!st.bright;
             let afterUrl = '', afterCap = '未確定';
             if (it.editedBlob) {
                 if (!it._statsOutUrl) it._statsOutUrl = URL.createObjectURL(it.editedBlob);
@@ -1607,7 +1664,10 @@
                    + fmt(r[2], r[4]) + r[3] + '</td><td>' + deltaCell(r[1], r[2], r[3], r[4]) + '</td></tr>';
             });
             h += '</table>';
-            if (!b1) h += '<div class="stats-note" style="margin-top:6px;">まだ確定していないので、補正後の数値はありません。</div>';
+            if (!measured) h += '<div class="stats-note" style="margin-top:6px;">'
+                + 'この写真はまだ測っていません。「↻ 読み込み直す」で測れます。</div>';
+            else if (!b1) h += '<div class="stats-note" style="margin-top:6px;">'
+                + 'まだ確定していないので、補正後の数値はありません。</div>';
             h += '</div>';
 
             h += '<div class="stats-card"><h5>撮影したときの記録</h5><table class="stats-t">';
@@ -1626,9 +1686,11 @@
                 h += '<tr><td>' + r[0] + '</td><td colspan="3">' + v + '</td></tr>';
             });
             h += '</table>';
-            if (st.ev100 === undefined) h += '<div class="stats-note" style="margin-top:6px;">'
+            if (measured && st.ev100 === undefined) h += '<div class="stats-note" style="margin-top:6px;">'
                 + 'この写真には撮影条件（ISO・露出）が残っていません。'
                 + '一度加工された画像を取り込むと、元の記録は失われます。</div>';
+            if (st.backfilled) h += '<div class="stats-note" style="margin-top:6px;">'
+                + 'この記録は、保管庫に残っていた元画像からあとで測ったものです。</div>';
             h += '</div>';
             box.innerHTML = h;
         }
@@ -1695,8 +1757,9 @@
         function renderStatsSummary() {
             const box = document.getElementById('statsSummary');
             const recs = allPhotoRecords();
-            const photos = recs.filter(r => r.st.kind !== 'catalog' && r.st.bright);
-            const catalogs = recs.filter(r => r.st.kind === 'catalog');
+            const photos = recs.filter(r => r.st && r.st.kind !== 'catalog' && r.st.bright);
+            const catalogs = recs.filter(r => r.st && r.st.kind === 'catalog');
+            const unmeasured = recs.filter(r => !r.st || !r.st.bright);
 
             if (!recs.length) {
                 box.innerHTML = '<div class="stats-empty">まだ記録がありません。<br>'
@@ -1713,10 +1776,18 @@
             const evMean = evs.length ? evs.reduce((a, b) => a + b, 0) / evs.length : null;
             const hiIso = photos.filter(r => r.st.exif && r.st.exif.iso >= 400).length;
             const blown = photos.filter(r => r.st.bright.blown >= 1).length;
-            const noShotInfo = recs.filter(r => r.st.ev100 === undefined).length;
+            const noShotInfo = photos.filter(r => r.st.ev100 === undefined).length;
             const done = recs.filter(r => r.item.outStats && r.item.outStats.bright).length;
 
             let h = '';
+            if (!photos.length) {
+                h += '<div class="stats-card"><div class="stats-note">'
+                   + '写真は ' + recs.length + ' 枚ありますが、まだ測っていません。<br>'
+                   + '<b>「↻ 読み込み直す」を押すと、保管庫に残っている元画像から測ります。</b><br>'
+                   + '写真そのものには手を触れません。</div></div>';
+                box.innerHTML = h;
+                return;
+            }
             h += '<div class="stats-card"><h5>この画面は何を表しているか</h5><div class="stats-note">'
                + '取り込んだ写真の明るさを1枚ずつ測って集めたものです。'
                + '<b>写真そのものは変えていません。</b>数字を残しているだけです。<br>'
@@ -1767,6 +1838,9 @@
                + '<tr><td>カタログ画像</td><td colspan="3">' + catalogs.length + ' 枚 <span style="color:var(--text-sub);">写真ではないので集計から除外</span></td></tr>'
                + '<tr><td>撮影条件が読めない写真</td><td colspan="3">' + noShotInfo + ' 枚'
                + ' <span style="color:var(--text-sub);">ISO・露出が残っていない</span></td></tr>'
+               + '<tr><td>まだ測っていない写真</td><td colspan="3">' + unmeasured.length + ' 枚'
+               + (unmeasured.length ? ' <span style="color:var(--text-sub);">「↻ 読み込み直す」で測れます</span>' : '')
+               + '</td></tr>'
                + '<tr><td>確定済み</td><td colspan="3">' + done + ' / ' + recs.length + ' 枚</td></tr>'
                + '</table><div class="stats-note" style="margin-top:6px;">'
                + '「現場の光量」はカメラの露出設定から求めた、その場にどれだけ光があったかの目安です。'
@@ -1778,7 +1852,14 @@
             if (cv) drawStatsHistogram(cv, vals, SITE_BASELINE);
         }
 
-        function refreshStatsModal(keepPick) {
+        async function refreshStatsModal(keepPick) {
+            const el0 = document.getElementById('statsUpdatedAt');
+            try {
+                await backfillPhotoStats((d, t) => {
+                    if (el0) el0.innerText = '測っています... ' + d + ' / ' + t;
+                });
+            } catch (e) { console.warn('さかのぼり測定でエラー:', e); }
+
             const recs = allPhotoRecords();
             const prev = keepPick ? statsPhotoPick.value : null;
             statsPhotoPick.innerHTML = '';
