@@ -134,6 +134,14 @@
         }
 
         .large-center-tab:hover { color: var(--text-main); }
+        .large-center-tabs { flex-wrap: wrap; max-width: 420px; }
+        .large-center-tab { padding: 5px 9px; white-space: nowrap; }
+        .center-sep { width: 1px; align-self: stretch; margin: 3px 2px;
+                      background: var(--border-color); flex: 0 0 auto; }
+        .category-pick { margin-left: 8px; padding: 5px 6px; font-size: 12px; font-weight: 600;
+                         background: var(--bg-control); color: var(--text-main);
+                         border: 1px solid var(--border-color); border-radius: 7px;
+                         max-width: 190px; flex-shrink: 0; }
 
         .large-center-tab.active {
             background: var(--bg-panel);
@@ -704,11 +712,8 @@
         </div>
 
         <!-- 画面一番左の大きめセンター対応タブ -->
-        <div class="large-center-tabs">
-            <button class="large-center-tab active" data-center="GU1">GU1</button>
-            <button class="large-center-tab" data-center="GU2">GU2</button>
-            <button class="large-center-tab" data-center="GU4">GU4</button>
-        </div>
+        <div class="large-center-tabs" id="centerTabs"></div>
+        <select id="categoryPick" class="category-pick" title="商品カテゴリ。商品コードの4〜5文字目になります。"></select>
         </div>
 
         <!-- 右側のAI連携とシステム設定 -->
@@ -1158,8 +1163,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.14.1-beta';
-        const APP_BUILD = '20260907-1130';
+        const APP_VERSION = '0.15.0-beta';
+        const APP_BUILD = '20260907-1215';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1251,6 +1256,7 @@
             geminiApiKey: '',
             autoAiAnalyze: true,
             selectedCenter: 'GU1',
+            selectedCategory: 'RB',
             sidebarWidth: 360,
             pendingCollapsed: false,
             thumbSize: 100,
@@ -1313,6 +1319,8 @@
             document.querySelectorAll('.large-center-tab').forEach(tab => {
                 tab.classList.toggle('active', tab.getAttribute('data-center') === uiConfig.selectedCenter);
             });
+            const cp = document.getElementById('categoryPick');
+            if (cp && uiConfig.selectedCategory) cp.value = uiConfig.selectedCategory;
 
             applySidebarWidth(uiConfig.sidebarWidth);
             applyPendingPosition(uiConfig.pendingPosition || 'auto');
@@ -1934,14 +1942,131 @@
             });
         });
 
-        document.querySelectorAll('.large-center-tab').forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                const centerVal = e.target.getAttribute('data-center');
-                uiConfig.selectedCenter = centerVal;
-                saveConfig();
-                status.innerText = `対応センターを「${centerVal}」に切り替えました。`;
+
+
+
+        // ============================================================
+        //  拠点とカテゴリ、そして商品コードの採番
+        //
+        //  中古マテハンサイトの商品コードと同じ形にする。
+        //      GU1NE-260907-001
+        //      ▲▲▲ ▲▲ ▲▲▲▲▲▲ ▲▲▲
+        //      拠点 分類  撮影日  連番
+        //  連番は「拠点＋分類＋日付」が同じものの中で 001 から続く。
+        //
+        //  ※ 埼玉は ST。UIの下書きには SA とあったが、実際の商品コード
+        //     6,130件を調べたところ SA は1件も無かったため ST で統一する。
+        // ============================================================
+        const CENTER_GROUPS = [
+            { area: '群馬', codes: ['GU1', 'GU2', 'GU3', 'GU4'] },
+            { area: '埼玉', codes: ['ST1', 'ST2', 'ST3'] },
+            { area: '愛知', codes: ['AI1', 'AI2'] },
+            { area: '大阪', codes: ['OS1', 'OS2', 'OS3', 'OS4'] },
+            { area: 'その他', codes: ['NR1', 'FO1', 'DT1', 'KF1'] }
+        ];
+        // 画面には出さない。マウスを載せた時だけ出す（横幅を取らないため）。
+        const CENTER_NAMES = {
+            GU1: '太田RUセンター', GU2: '大久保センター', GU4: '太田第二RUセンター',
+            OS1: '東大阪センター', OS2: '堺センター（堺RUセンター）',
+            AI1: '愛知第1センター', AI2: '名古屋センター（愛知第2）'
+        };
+        // サイトのカテゴリ名から取得したもの。件数の多い順。
+        const CATEGORIES = [
+            ['RB', 'カゴ台車本体'], ['RK', '中量ラック'], ['NE', 'ネスティングラック'],
+            ['CR', '平台車'], ['PA', '樹脂パレット'], ['PR', 'パレットラック'],
+            ['CO', 'アルミローラーコンベヤ'], ['CT', '折りたたみコンテナ'], ['WT', '作業台'],
+            ['OF', 'オフィス什器'], ['MP', 'メッシュパレット'], ['HL', 'ハンドリフト'],
+            ['SL', '脚立・踏台・はしご'], ['AC', '冷暖房用品'], ['MC', '梱包機／封函機'],
+            ['RP', 'パレットラック(RP)'], ['AI', 'その他(AI)'], ['FL', 'その他(FL)'], ['OT', 'その他']
+        ];
+
+        // GU1NE-260907-001 の形かどうか
+        const ITEM_CODE_RE = /^[A-Z]{2}[0-9][A-Z]{2}-\d{6}-\d{3}$/;
+
+        function buildCenterTabs() {
+            const box = document.getElementById('centerTabs');
+            if (!box) return;
+            box.innerHTML = '';
+            CENTER_GROUPS.forEach((g, gi) => {
+                if (gi > 0) {
+                    const sep = document.createElement('div');
+                    sep.className = 'center-sep';
+                    box.appendChild(sep);
+                }
+                g.codes.forEach(code => {
+                    const b = document.createElement('button');
+                    b.className = 'large-center-tab';
+                    b.setAttribute('data-center', code);
+                    b.textContent = code;
+                    b.title = g.area + 'エリア' + (CENTER_NAMES[code] ? '  ' + CENTER_NAMES[code] : '');
+                    if (code === uiConfig.selectedCenter) b.classList.add('active');
+                    b.addEventListener('click', () => {
+                        uiConfig.selectedCenter = code;
+                        saveConfig();
+                        buildCenterTabs();
+                        status.innerText = '拠点を「' + code + '」にしました。次に作るフォルダは '
+                            + nextItemCode() + ' になります。';
+                    });
+                    box.appendChild(b);
+                });
             });
-        });
+        }
+
+        function buildCategoryPick() {
+            const sel = document.getElementById('categoryPick');
+            if (!sel) return;
+            sel.innerHTML = '';
+            CATEGORIES.forEach(([code, name]) => {
+                const o = document.createElement('option');
+                o.value = code;
+                o.textContent = code + ' ' + name;
+                sel.appendChild(o);
+            });
+            sel.value = uiConfig.selectedCategory || 'RB';
+            sel.addEventListener('change', () => {
+                uiConfig.selectedCategory = sel.value;
+                saveConfig();
+                status.innerText = '次に作るフォルダは ' + nextItemCode() + ' になります。';
+            });
+        }
+
+        function todayCode(d) {
+            const t = d || new Date();
+            const p2 = v => ('0' + v).slice(-2);
+            return p2(t.getFullYear() % 100) + p2(t.getMonth() + 1) + p2(t.getDate());
+        }
+
+        // 拠点＋分類＋日付 が同じフォルダを数えて、その次の番号を返す。
+        // 途中が抜けていても最大値の次にする（番号の重複を避けるため）。
+        function nextItemCode(center, cat, ymd) {
+            const c = center || uiConfig.selectedCenter || 'GU1';
+            const k = cat || uiConfig.selectedCategory || 'RB';
+            const d = ymd || todayCode();
+            const head = c + k + '-' + d + '-';
+            let max = 0;
+            folders.forEach(f => {
+                const name = String(f.name || '').replace(/^[^A-Za-z0-9]+/, '').trim();
+                if (name.indexOf(head) === 0) {
+                    const n = parseInt(name.slice(head.length, head.length + 3), 10);
+                    if (!isNaN(n) && n > max) max = n;
+                }
+            });
+            return head + ('00' + (max + 1)).slice(-3);
+        }
+
+        buildCenterTabs();
+        buildCategoryPick();
+
+        // フォルダの並べ替え。上下に動かすだけで、名前は変えない。
+        function moveFolder(folderId, dir) {
+            const i = folders.findIndex(f => f.id === folderId);
+            const j = i + dir;
+            if (i < 0 || j < 0 || j >= folders.length) return;
+            const t = folders[i]; folders[i] = folders[j]; folders[j] = t;
+            updateItemNames();
+            renderUI();
+            saveToDB();
+        }
 
         // --- 表示モードのプリセット ---
         const DISPLAY_PRESETS = {
@@ -2351,9 +2476,15 @@
                 let cleanName = folder.name.replace(/^[^\w\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]+/u, '').trim();
                 if (!cleanName) cleanName = folder.name;
                 
+                // 商品コードのフォルダは、写真名もサイトと同じ形にする。
+                //   GU1NE-260907-001-01 / -02 / -03 ...
+                // 検品表のファイル名もこれに合わせるため、ここを正とする。
+                const isCode = ITEM_CODE_RE.test(cleanName);
                 folder.items.forEach((item, index) => {
                     // 自動採番名は常に持っておき、個別名が付いていればそちらを優先する
-                    item.autoName = `${cleanName}${index + 1}`;
+                    item.autoName = isCode
+                        ? `${cleanName}-${('0' + (index + 1)).slice(-2)}`
+                        : `${cleanName}${index + 1}`;
                     const own = (item.userName || '').trim();
                     item.customName = own ? own : item.autoName;
                 });
@@ -3338,7 +3469,9 @@
                 return;
             }
 
-            const groupName = dirNameHint || `分類グループ${folders.length + 1}`;
+            // フォルダ名は商品コードで自動採番する。
+            // ドロップ元のフォルダ名があればそちらを尊重する（手作業の意図を消さない）。
+            const groupName = dirNameHint || nextItemCode();
             let skipMsg = invalidCount > 0 ? `\n(※写真以外のファイル ${invalidCount} 件は自動スキップされます)` : '';
             const message = `画像ファイルが ${validFiles.length} 件検出されました。${skipMsg}\n\n「${groupName}」として新規フォルダに同封・作成しますか？`;
 
@@ -3348,7 +3481,7 @@
             }
 
             const newFolderId = `folder_${Date.now()}`;
-            const newFolderName = `📁 ${groupName}`;
+            const newFolderName = ITEM_CODE_RE.test(groupName) ? groupName : `📁 ${groupName}`;
             const newFolderObj = { id: newFolderId, name: newFolderName, isOpen: true, items: [] };
             folders.push(newFolderObj);
             activeFolderId = newFolderId;
@@ -3847,6 +3980,23 @@
                     }
                 };
                 folderActions.appendChild(editFolderBtn);
+
+                // 個数順に 001,002 と付けていくので、順番を直せるようにしておく
+                const upBtn = document.createElement('button');
+                upBtn.className = 'icon-btn';
+                upBtn.innerHTML = '▲';
+                upBtn.title = 'このフォルダを上へ';
+                upBtn.disabled = (folders.indexOf(folder) === 0);
+                upBtn.onclick = (e) => { e.stopPropagation(); moveFolder(folder.id, -1); };
+                folderActions.appendChild(upBtn);
+
+                const downBtn = document.createElement('button');
+                downBtn.className = 'icon-btn';
+                downBtn.innerHTML = '▼';
+                downBtn.title = 'このフォルダを下へ';
+                downBtn.disabled = (folders.indexOf(folder) === folders.length - 1);
+                downBtn.onclick = (e) => { e.stopPropagation(); moveFolder(folder.id, 1); };
+                folderActions.appendChild(downBtn);
 
                 if (doneItems.length > 0) {
                     const dlBtn = document.createElement('button');
