@@ -1164,8 +1164,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.16.0-beta';
-        const APP_BUILD = '20260907-1305';
+        const APP_VERSION = '0.16.1-beta';
+        const APP_BUILD = '20260907-1320';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -2176,15 +2176,59 @@
         buildCenterTabs();
         buildCategoryPick();
 
-        // フォルダの並べ替え。上下に動かすだけで、名前は変えない。
+        // 並べた順に 001,002,... を振り直す。
+        //
+        //  振り直すのは自動で付けた商品コードのフォルダだけ。
+        //  手で名前を付けたフォルダには触れない（意図を消さないため）。
+        //  番号は「拠点＋分類＋日付」が同じものの中だけで数える。
+        function renumberFolders() {
+            const seen = {};
+            const changed = [];
+            folders.forEach(folder => {
+                const name = String(folder.name || '').replace(/^[^A-Za-z0-9]+/, '').trim();
+                if (!ITEM_CODE_RE.test(name)) return;          // 手書きの名前は対象外
+                const head = name.slice(0, 13);                // GU1NE-260907-
+                seen[head] = (seen[head] || 0) + 1;
+                const next = head + ('00' + seen[head]).slice(-3);
+                if (next !== name) {
+                    changed.push([name, next]);
+                    folder.name = next;
+                }
+            });
+            return changed;
+        }
+
+        // フォルダの並べ替え。並べた順に番号を振り直す。
         function moveFolder(folderId, dir) {
             const i = folders.findIndex(f => f.id === folderId);
             const j = i + dir;
             if (i < 0 || j < 0 || j >= folders.length) return;
-            const t = folders[i]; folders[i] = folders[j]; folders[j] = t;
+
+            // 書き出し済みのフォルダの番号が変わると、
+            // 保存先に古い名前のファイルが残ってしまう。先に知らせる。
+            const t0 = folders[i], t1 = folders[j];
+            const willRename = [t0, t1].some(f =>
+                ITEM_CODE_RE.test(String(f.name || '').replace(/^[^A-Za-z0-9]+/, '').trim())
+                && (f.items || []).some(it => it.isDone));
+            if (willRename && driveHandle) {
+                const ok = confirm(
+                    '並べ替えると番号が振り直され、確定済みの写真の名前も変わります。\n\n'
+                    + '保存先フォルダには古い名前のファイルが残ります。\n'
+                    + '（新しい名前で書き出し直す必要があります）\n\n'
+                    + '続けますか？');
+                if (!ok) return;
+            }
+
+            folders[i] = t1; folders[j] = t0;
+            const changed = renumberFolders();
             updateItemNames();
             renderUI();
             saveToDB();
+
+            status.innerText = changed.length
+                ? `並べ替えました。${changed.length} 件の番号を振り直しました`
+                  + `（${changed[0][0]} → ${changed[0][1]}${changed.length > 1 ? ' ほか' : ''}）。`
+                : '並べ替えました。';
         }
 
         // --- 表示モードのプリセット ---
