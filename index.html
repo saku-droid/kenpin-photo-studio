@@ -1195,8 +1195,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.17.0-beta';
-        const APP_BUILD = '20260907-1440';
+        const APP_VERSION = '0.18.0-beta';
+        const APP_BUILD = '20260907-1500';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -2132,7 +2132,7 @@
             ['CO', 'アルミローラーコンベヤ'], ['CT', '折りたたみコンテナ'], ['WT', '作業台'],
             ['OF', 'オフィス什器'], ['MP', 'メッシュパレット'], ['HL', 'ハンドリフト'],
             ['SL', '脚立・踏台・はしご'], ['AC', '冷暖房用品'], ['MC', '梱包機／封函機'],
-            ['RP', 'パレットラック(RP)'], ['AI', 'その他(AI)'], ['FL', 'その他(FL)'], ['OT', 'その他']
+            ['FL', 'フォークリフト'], ['RP', 'パレットラック(RP)'], ['AI', 'その他(AI)'], ['OT', 'その他']
         ];
 
         // GU1NE-260907-001 の形かどうか
@@ -2252,6 +2252,28 @@
                 }
             });
             return changed;
+        }
+
+        // 判定した分類を商品コードへ入れ直す。
+        // 分類が変われば連番の枠も変わるので、番号も取り直す。
+        // 手で名前を付けたフォルダには触れない。
+        function applyDetectedCategory(folderObj, code) {
+            const name = String(folderObj.name || '').replace(/^[^A-Za-z0-9]+/, '').trim();
+            if (!ITEM_CODE_RE.test(name)) return null;      // 手書きの名前は対象外
+            if (name.slice(3, 5) === code) return null;      // すでに同じ
+            const head = name.slice(0, 3) + code + '-' + name.slice(6, 12) + '-';
+            let max = 0;
+            folders.forEach(f => {
+                if (f === folderObj) return;                 // 自分は数えない
+                const n2 = String(f.name || '').replace(/^[^A-Za-z0-9]+/, '').trim();
+                if (n2.indexOf(head) === 0) {
+                    const v = parseInt(n2.slice(head.length, head.length + 3), 10);
+                    if (!isNaN(v) && v > max) max = v;
+                }
+            });
+            const before = name;
+            folderObj.name = head + ('00' + (max + 1)).slice(-3);
+            return { before: before, after: folderObj.name };
         }
 
         // フォルダの並べ替え。並べた順に番号を振り直す。
@@ -2565,10 +2587,17 @@
         loadConfig();
 
         // --- Gemini AI自動判別 ---
+        //
+        //  返させるのは分類コード（RB / NE / RK ...）。
+        //  養生テープにコードが書いてあればそれが一番確実なので、
+        //  まずテープを読み、無ければ形から判断させる。
+        //
+        //  判定できたら黙って商品コードへ入れる。確認は出さない。
+        //  取り違えたら、上の分類の選択から直せばよい。
         async function autoAnalyzeFirstImage(folderObj, firstImg) {
             if (!uiConfig.autoAiAnalyze || !uiConfig.geminiApiKey) return;
 
-            status.innerText = `🤖 [${uiConfig.selectedCenter}] Gemini AIが1枚目の写真から商品名を自動解析中...`;
+            status.innerText = `🤖 [${uiConfig.selectedCenter}] 1枚目から分類を判定中...`;
 
             try {
                 const tempCanvas = document.createElement('canvas');
@@ -2579,13 +2608,26 @@
                 const base64Image = tempCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
                 const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${uiConfig.geminiApiKey}`;
 
+                const list = CATEGORIES.map(([c, n]) => `${c}=${n}`).join(' / ');
+                const prompt =
+                    'これは中古マテハン（物流機器）の写真です。次の手順で分類コードを1つ選んでください。\n\n'
+                    + '手順1: 写真に貼られた養生テープ（緑・白・ピンク等）やシールの文字を読み、'
+                    + '英字2文字の分類コード（例 RB, NE, RK）が書かれていればそれを採用する。\n'
+                    + '手順2: 書かれていなければ、商品の形から下の一覧に照らして選ぶ。\n\n'
+                    + '分類一覧: ' + list + '\n\n'
+                    + '出力はJSONのみ。解説は不要。\n'
+                    + '{"code":"RB","name":"カゴ台車本体","from":"tape","confidence":0.9}\n'
+                    + 'from は tape（テープから読んだ）か shape（形から判断）。'
+                    + 'confidence は 0〜1。判断できない場合は code を "" にしてください。';
+
                 const payload = {
                     contents: [{
                         parts: [
-                            { text: "この画像は中古マテハン（物流資材・物流機器）の写真です。写真に貼られている養生テープ（緑色・白色・ピンク色等）の手書き文字やメモ、シール、および全体の商品形状から、このマテハンの商品名・種別（例：ネステナー、メッシュパレット、カゴ台車、プラスチックパレット、ハンドリフト、スチールラック等）を特定してください。返答は余計な解説を含めず、特定された日本語の商品名単語（15文字以内）のみを返してください。" },
+                            { text: prompt },
                             { inlineData: { mimeType: "image/jpeg", data: base64Image } }
                         ]
-                    }]
+                    }],
+                    generationConfig: { responseMimeType: "application/json", temperature: 0 }
                 };
 
                 const res = await fetch(endpoint, {
@@ -2595,17 +2637,38 @@
                 });
 
                 const data = await res.json();
-                if (data.candidates && data.candidates[0].content.parts[0].text) {
-                    const detectedName = data.candidates[0].content.parts[0].text.trim().replace(/[「」\n]/g, '');
-                    folderObj.name = `📁 ${detectedName}`;
-                    updateItemNames();
-                    renderUI();
-                    saveToDB();
-                    status.innerText = `🤖 AI自動判定成功: フォルダ名を「📁 ${detectedName}」に自動更新しました！`;
+                const raw = data && data.candidates && data.candidates[0]
+                    && data.candidates[0].content && data.candidates[0].content.parts[0].text;
+                if (!raw) { status.innerText = "分類の判定をスキップしました。"; return; }
+
+                let out = null;
+                try { out = JSON.parse(raw); }
+                catch (e) {
+                    const m = raw.match(/\{[\s\S]*\}/);
+                    if (m) { try { out = JSON.parse(m[0]); } catch (e2) {} }
                 }
+                const code = out && typeof out.code === 'string' ? out.code.trim().toUpperCase() : '';
+                const known = CATEGORIES.find(([c]) => c === code);
+                if (!known) { status.innerText = "分類を判定できませんでした。上の分類から選んでください。"; return; }
+
+                // 判定できたので、そのまま入れる。確認は出さない。
+                uiConfig.selectedCategory = code;
+                saveConfig();
+                const cp = document.getElementById('categoryPick');
+                if (cp) cp.value = code;
+
+                const moved = applyDetectedCategory(folderObj, code);
+                updateItemNames();
+                renderUI();
+                saveToDB();
+
+                const src = (out.from === 'tape') ? '養生テープから' : '形から';
+                status.innerText = moved
+                    ? `🤖 ${src}「${known[1]}」と判定。${moved.after} にしました。`
+                    : `🤖 ${src}「${known[1]}」と判定しました。`;
             } catch (err) {
                 console.error(err);
-                status.innerText = "AI自動判定をスキップしました";
+                status.innerText = "分類の判定をスキップしました。";
             }
         }
 
