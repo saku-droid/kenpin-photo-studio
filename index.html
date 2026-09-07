@@ -134,14 +134,41 @@
         }
 
         .large-center-tab:hover { color: var(--text-main); }
-        .large-center-tabs { flex-wrap: wrap; max-width: 420px; }
-        .large-center-tab { padding: 5px 9px; white-space: nowrap; }
-        .center-sep { width: 1px; align-self: stretch; margin: 3px 2px;
-                      background: var(--border-color); flex: 0 0 auto; }
-        .category-pick { margin-left: 8px; padding: 5px 6px; font-size: 12px; font-weight: 600;
+        /* 拠点は1つだけ出す。カーソルを合わせると候補が出る。 */
+        .center-picker { position: relative; display: inline-block; flex-shrink: 0; }
+        .large-center-tab { padding: 5px 10px; font-size: 12px; white-space: nowrap; }
+        #centerCurrent { background: var(--bg-control); border-radius: 9px; min-width: 52px; }
+        #centerCurrent::after { content: ' ▾'; opacity: .55; font-size: 9px; }
+
+        .center-menu {
+            display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 60;
+            background: var(--bg-panel); border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 4px; min-width: 168px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.32);
+        }
+        /* カーソルが離れた瞬間に消えると押せないので、上に隙間を作って繋げる */
+        .center-picker::after { content: ''; position: absolute; top: 100%; left: 0;
+                                width: 100%; height: 6px; }
+        .center-picker:hover .center-menu,
+        .center-picker.open .center-menu { display: block; }
+
+        .center-menu-area { font-size: 10px; color: var(--text-sub);
+                            padding: 4px 7px 2px; letter-spacing: .04em; }
+        .center-menu-item {
+            display: flex; align-items: baseline; gap: 7px; width: 100%;
+            background: transparent; border: none; cursor: pointer;
+            color: var(--text-main); text-align: left;
+            padding: 5px 7px; border-radius: 6px; font-size: 11px;
+        }
+        .center-menu-item:hover { background: var(--bg-control); }
+        .center-menu-item.active { background: var(--bg-control); font-weight: 700; }
+        .center-menu-item b { font-size: 12px; min-width: 30px; }
+        .center-menu-item span { color: var(--text-sub); font-size: 10px; }
+        .category-pick { margin-left: 6px; padding: 4px 5px; font-size: 11px; font-weight: 600;
                          background: var(--bg-control); color: var(--text-main);
                          border: 1px solid var(--border-color); border-radius: 7px;
-                         max-width: 190px; flex-shrink: 0; }
+                         max-width: 160px; flex-shrink: 0;
+                         text-overflow: ellipsis; }
 
         .large-center-tab.active {
             background: var(--bg-panel);
@@ -712,7 +739,11 @@
         </div>
 
         <!-- 画面一番左の大きめセンター対応タブ -->
-        <div class="large-center-tabs" id="centerTabs"></div>
+        <div class="center-picker" id="centerPicker">
+            <button class="large-center-tab active" id="centerCurrent" type="button"
+                    title="カーソルを合わせると拠点を選べます">—</button>
+            <div class="center-menu" id="centerMenu"></div>
+        </div>
         <select id="categoryPick" class="category-pick" title="商品カテゴリ。商品コードの4〜5文字目になります。"></select>
         </div>
 
@@ -1164,8 +1195,8 @@
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.16.1-beta';
-        const APP_BUILD = '20260907-1320';
+        const APP_VERSION = '0.17.0-beta';
+        const APP_BUILD = '20260907-1440';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1317,9 +1348,7 @@
                 aiStatusBadge.style.display = 'none';
             }
 
-            document.querySelectorAll('.large-center-tab').forEach(tab => {
-                tab.classList.toggle('active', tab.getAttribute('data-center') === uiConfig.selectedCenter);
-            });
+            if (typeof buildCenterTabs === 'function') buildCenterTabs();
             const cp = document.getElementById('categoryPick');
             if (cp && uiConfig.selectedCategory) cp.value = uiConfig.selectedCategory;
 
@@ -2076,19 +2105,26 @@
         //  ※ 埼玉は ST。UIの下書きには SA とあったが、実際の商品コード
         //     6,130件を調べたところ SA は1件も無かったため ST で統一する。
         // ============================================================
+        // 今そこで撮影できる拠点だけを出す。
+        // 閉鎖した拠点をタブに残すと、選べてしまって誤った商品コードができる。
         const CENTER_GROUPS = [
-            { area: '群馬', codes: ['GU1', 'GU2', 'GU3', 'GU4'] },
-            { area: '埼玉', codes: ['ST1', 'ST2', 'ST3'] },
-            { area: '愛知', codes: ['AI1', 'AI2'] },
-            { area: '大阪', codes: ['OS1', 'OS2', 'OS3', 'OS4'] },
-            { area: 'その他', codes: ['NR1', 'FO1', 'DT1', 'KF1'] }
+            { area: '群馬', codes: ['GU1', 'GU2', 'GU4'] },
+            { area: '愛知', codes: ['AI2'] },
+            { area: '大阪', codes: ['OS1', 'OS2'] }
         ];
         // 画面には出さない。マウスを載せた時だけ出す（横幅を取らないため）。
+        // 名称は kintone 基幹システムマニュアル ver1.1 と本人確認による。
         const CENTER_NAMES = {
             GU1: '太田RUセンター', GU2: '大久保センター', GU4: '太田第二RUセンター',
-            OS1: '東大阪センター', OS2: '堺センター（堺RUセンター）',
-            AI1: '愛知第1センター', AI2: '名古屋センター（愛知第2）'
+            AI2: '名古屋センター', OS1: '東大阪センター', OS2: '堺センター',
+            // ここから下は閉鎖済み。過去の商品コードには残っているので、
+            // 名前を引けるようにだけしておく。タブには出さない。
+            GU3: '伊勢崎センター', AI1: '愛知第1センター',
+            ST1: '浦和RUセンター', ST2: '見沼RUセンター', ST3: 'FCウレルロジスティクス',
+            OS3: '摂津倉庫'
         };
+        const CLOSED_CENTERS = ['GU3', 'AI1', 'ST1', 'ST2', 'ST3', 'OS3', 'OS4',
+                                'NR1', 'FO1', 'DT1', 'KF1'];
         // サイトのカテゴリ名から取得したもの。件数の多い順。
         const CATEGORIES = [
             ['RB', 'カゴ台車本体'], ['RK', '中量ラック'], ['NE', 'ネスティングラック'],
@@ -2102,33 +2138,53 @@
         // GU1NE-260907-001 の形かどうか
         const ITEM_CODE_RE = /^[A-Z]{2}[0-9][A-Z]{2}-\d{6}-\d{3}$/;
 
+        // 拠点は1つだけ出す。変えたい時だけ候補を開く。
+        // いまの「自動」は前回選んだ拠点を覚えているだけ。
+        // 位置情報からの自動判定は、センター判定基盤を繋いだ時に差し替える。
         function buildCenterTabs() {
-            const box = document.getElementById('centerTabs');
-            if (!box) return;
-            box.innerHTML = '';
-            CENTER_GROUPS.forEach((g, gi) => {
-                if (gi > 0) {
-                    const sep = document.createElement('div');
-                    sep.className = 'center-sep';
-                    box.appendChild(sep);
-                }
-                g.codes.forEach(code => {
+            const cur = document.getElementById('centerCurrent');
+            const menu = document.getElementById('centerMenu');
+            const picker = document.getElementById('centerPicker');
+            if (!cur || !menu) return;
+
+            const code = uiConfig.selectedCenter || 'GU1';
+            cur.textContent = code;
+            cur.title = (CENTER_NAMES[code] || '（名称未確認）') + '  ／ カーソルを合わせると変えられます';
+
+            menu.innerHTML = '';
+            CENTER_GROUPS.forEach(g => {
+                const head = document.createElement('div');
+                head.className = 'center-menu-area';
+                head.textContent = g.area;
+                menu.appendChild(head);
+                g.codes.forEach(c => {
                     const b = document.createElement('button');
-                    b.className = 'large-center-tab';
-                    b.setAttribute('data-center', code);
-                    b.textContent = code;
-                    b.title = g.area + 'エリア' + (CENTER_NAMES[code] ? '  ' + CENTER_NAMES[code] : '');
-                    if (code === uiConfig.selectedCenter) b.classList.add('active');
+                    b.className = 'center-menu-item' + (c === code ? ' active' : '');
+                    b.type = 'button';
+                    b.innerHTML = '<b>' + c + '</b><span>' + (CENTER_NAMES[c] || '') + '</span>';
                     b.addEventListener('click', () => {
-                        uiConfig.selectedCenter = code;
+                        uiConfig.selectedCenter = c;
                         saveConfig();
+                        picker.classList.remove('open');
                         buildCenterTabs();
-                        status.innerText = '拠点を「' + code + '」にしました。次に作るフォルダは '
-                            + nextItemCode() + ' になります。';
+                        status.innerText = '拠点を「' + c + ' ' + (CENTER_NAMES[c] || '')
+                            + '」にしました。次に作るフォルダは ' + nextItemCode() + ' です。';
                     });
-                    box.appendChild(b);
+                    menu.appendChild(b);
                 });
             });
+
+            // 触る画面にはカーソルが無いので、押しても開くようにする
+            if (!cur.dataset.bound) {
+                cur.dataset.bound = '1';
+                cur.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    picker.classList.toggle('open');
+                });
+                document.addEventListener('click', (e) => {
+                    if (!picker.contains(e.target)) picker.classList.remove('open');
+                });
+            }
         }
 
         function buildCategoryPick() {
@@ -2275,7 +2331,7 @@
         const FEATURE_TOGGLES = [
             { group: '上のバー' },
             { key: 'showPhotoNav',     name: '写真送り ◀ ▶',           sel: '.photo-nav',            disp: 'flex' },
-            { key: 'showCenterTabs',   name: '拠点タブ (GU1/2/4)',      sel: '.large-center-tabs',    disp: 'flex' },
+            { key: 'showCenterTabs',   name: '拠点の選択',              sel: '#centerPicker',         disp: 'inline-block' },
             { key: 'showVersion',      name: 'バージョン表示',           sel: '#appVersion',           disp: 'inline-block' },
 
             { group: '1段目の操作' },
