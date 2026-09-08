@@ -631,6 +631,59 @@
         .drive-state-sub { font-size: 11px; color: var(--text-sub); margin-top: 2px; word-break: break-all; }
         .drive-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
+
+        /* ── 画面のタブ ────────────────────────────── */
+        .top-tabs { display:flex; gap:2px; padding:4px 8px 0; background:var(--bg-panel);
+                    border-bottom:1px solid var(--border-color); flex-shrink:0; }
+        .top-tab { background:transparent; color:var(--text-sub); border:none; cursor:pointer;
+                   padding:7px 16px; font-size:12px; font-weight:bold; white-space:nowrap;
+                   border-radius:7px 7px 0 0; }
+        .top-tab:hover { color:var(--text-main); }
+        .top-tab.active { background:var(--bg-control); color:var(--text-main); }
+        .tab-page { flex:1; min-height:0; display:flex; flex-direction:column; }
+        .tab-page[hidden] { display:none !important; }
+
+        /* ── ひな形の見本（写真の横に並べる） ──────────── */
+        .tpl-pane { position:absolute; top:8px; left:8px; bottom:8px; width:220px; z-index:20;
+                    background:rgba(20,20,20,0.94); border:1px solid var(--border-color);
+                    border-radius:9px; padding:9px; overflow:auto;
+                    box-shadow:0 6px 20px rgba(0,0,0,0.45); }
+        .tpl-pane-head { display:flex; justify-content:space-between; align-items:center;
+                         font-size:11px; margin-bottom:6px; }
+        .tpl-pane-tabs { display:flex; gap:2px; margin-bottom:8px; }
+        .tpl-tab { flex:1; background:var(--bg-control); color:var(--text-sub); border:none;
+                   border-radius:5px; padding:4px 2px; font-size:10px; cursor:pointer; }
+        .tpl-tab.active { background:#007bff; color:#fff; }
+        .tpl-asset { display:flex; gap:7px; align-items:center; background:var(--bg-panel);
+                     border:1px solid var(--border-color); border-radius:7px; padding:6px;
+                     cursor:grab; }
+        .tpl-asset:hover { border-color:#00bcd4; }
+        .tpl-asset img, .tpl-asset canvas { width:46px; height:46px; object-fit:cover;
+                     border-radius:4px; background:#fff; flex-shrink:0; }
+        .tpl-asset .nm { flex:1; min-width:0; font-size:10px; line-height:1.35;
+                     overflow:hidden; text-overflow:ellipsis; }
+        .tpl-asset .ren { flex-shrink:0; }
+        .tpl-empty { font-size:10px; color:var(--text-sub); line-height:1.7; padding:6px 2px; }
+        .tpl-pane-note { font-size:9px; color:var(--text-sub); margin-top:8px; line-height:1.5; }
+        .tpl-list { display:flex; flex-direction:column; gap:10px; }
+        .tpl-card { background:var(--bg-panel); border:1px solid var(--border-color);
+                    border-radius:8px; padding:8px; cursor:pointer; }
+        .tpl-card:hover { border-color:#00bcd4; }
+        .tpl-card.on { border-color:#00bcd4; box-shadow:0 0 0 1px #00bcd4 inset; }
+        .tpl-card canvas { width:100%; aspect-ratio:1/1; background:#fff; border-radius:5px;
+                           border:1px solid var(--border-color); display:block; }
+        .tpl-card h4 { margin:7px 0 3px; font-size:11px; }
+        .tpl-card .cats { font-size:10px; color:var(--text-sub); }
+        .tpl-parts { margin-top:7px; font-size:10px; }
+        .tpl-parts div { display:flex; justify-content:space-between; padding:2px 0;
+                         border-bottom:1px solid var(--border-sub); }
+        .tpl-parts span.no { color:var(--text-sub); }
+        .tpl-parts span.ok { color:#0f9d58; }
+        .tpl-use { width:100%; margin-top:7px; font-size:10px; padding:4px; }
+
+        /* 基盤の画面はタブの中に置くので、余白だけ整える */
+        #tabAccount .kiban-inner { padding:16px; overflow:auto; }
+
         /* 写真の記録 */
         .stats-grid { display: grid; grid-template-columns: 380px 1fr; gap: 14px; align-items: start; }
         @media (max-width: 900px) { .stats-grid { grid-template-columns: 1fr; } }
@@ -721,9 +774,761 @@
         #dropOverlay { position: absolute; pointer-events: none; color: var(--text-sub); font-size: 14px; font-weight: bold; text-align: center; z-index: 0; }
         #status { margin-top: 4px; font-size: 12px; color: #00e676; text-align: center; flex-shrink: 0; }
         .selection-bar { display: none; gap: 6px; align-items: center; background: #dc3545; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-bottom: 6px; }
-    </style>
+
+        /* ── 共通セキュリティ基盤の画面ぶん ── */
+        #tabAccount { display: flex; flex-direction: column; min-height: 0; }
+
+
+        #tabAccount {
+          color-scheme: light;
+          --background: #f5f5ef;
+          --surface: #fffef9;
+          --surface-soft: #f0f3ec;
+          --ink: #17211c;
+          --muted: #667169;
+          --line: #d8ded8;
+          --green: #17653b;
+          --green-dark: #10482b;
+          --green-soft: #e3f2e8;
+          --orange: #c56a22;
+          --orange-soft: #fff0df;
+          --red: #a53a32;
+          --red-soft: #fbe8e6;
+          --shadow: 0 16px 45px rgb(37 55 45 / 8%);
+          --radius: 18px;
+          font-family: Inter, "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
+          font-synthesis: none;
+        }
+
+        
+        #tabAccount * {
+          box-sizing: border-box;
+        }
+
+        
+        #tabAccount {
+          margin: 0;
+          min-width: 320px;
+          min-height: 100vh;
+          color: var(--ink);
+          background:
+            radial-gradient(circle at 88% -10%, rgb(234 215 177 / 55%), transparent 28rem),
+            var(--background);
+          line-height: 1.65;
+        }
+
+        
+        #tabAccount button, #tabAccount input, #tabAccount select, #tabAccount textarea {
+          font: inherit;
+        }
+
+        
+        #tabAccount button, #tabAccount select {
+          cursor: pointer;
+        }
+
+        
+        #tabAccount button:disabled, #tabAccount input:disabled, #tabAccount select:disabled, #tabAccount textarea:disabled {
+          cursor: wait;
+          opacity: 0.62;
+        }
+
+        
+        #tabAccount a {
+          color: var(--green);
+          overflow-wrap: anywhere;
+        }
+
+        
+        #tabAccount .site-header {
+          padding: 48px 24px 68px;
+          color: #f9fff9;
+          background: linear-gradient(135deg, #132c20, #1d5133 67%, #386543);
+        }
+
+        
+        #tabAccount .header-inner, #tabAccount .shell {
+          width: min(1120px, 100%);
+          margin: 0 auto;
+        }
+
+        
+        #tabAccount .header-inner {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 32px;
+        }
+
+        
+        #tabAccount .eyebrow, #tabAccount .step-label {
+          margin: 0 0 4px;
+          font-size: 0.72rem;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+        }
+
+        
+        #tabAccount .eyebrow {
+          color: #b9d7c3;
+        }
+
+        
+        #tabAccount h1, #tabAccount h2, #tabAccount h3, #tabAccount p {
+          margin-top: 0;
+        }
+
+        
+        #tabAccount h1 {
+          margin-bottom: 8px;
+          font-size: clamp(2rem, 6vw, 3.25rem);
+          line-height: 1.1;
+          letter-spacing: -0.04em;
+        }
+
+        
+        #tabAccount h2 {
+          margin-bottom: 0;
+          font-size: clamp(1.28rem, 3vw, 1.65rem);
+          line-height: 1.3;
+          letter-spacing: -0.025em;
+        }
+
+        
+        #tabAccount h3 {
+          margin-bottom: 6px;
+          font-size: 1.05rem;
+        }
+
+        
+        #tabAccount .lede {
+          max-width: 680px;
+          margin-bottom: 0;
+          color: #d9e8dd;
+        }
+
+        
+        #tabAccount .status-card {
+          display: grid;
+          grid-template-columns: auto minmax(120px, 1fr) auto;
+          align-items: center;
+          gap: 12px;
+          min-width: 310px;
+          padding: 14px 16px;
+          color: var(--ink);
+          background: rgb(255 255 249 / 94%);
+          border: 1px solid rgb(255 255 255 / 45%);
+          border-radius: 15px;
+          box-shadow: 0 12px 30px rgb(0 0 0 / 12%);
+        }
+
+        
+        #tabAccount .status-card strong, #tabAccount .status-card small, #tabAccount .status-label {
+          display: block;
+          line-height: 1.35;
+        }
+
+        
+        #tabAccount .status-label, #tabAccount .status-card small {
+          color: var(--muted);
+          font-size: 0.76rem;
+        }
+
+        
+        #tabAccount .status-dot {
+          width: 11px;
+          height: 11px;
+          border-radius: 50%;
+          box-shadow: 0 0 0 4px rgb(102 113 105 / 15%);
+        }
+
+        
+        #tabAccount .status-dot--pending {
+          background: #8f998f;
+        }
+
+        
+        #tabAccount .status-dot--online {
+          background: #269653;
+          box-shadow: 0 0 0 4px rgb(38 150 83 / 16%);
+        }
+
+        
+        #tabAccount .status-dot--offline {
+          background: var(--red);
+          box-shadow: 0 0 0 4px rgb(165 58 50 / 15%);
+        }
+
+        
+        #tabAccount .shell {
+          position: relative;
+          z-index: 1;
+          margin-top: -34px;
+          padding: 0 24px 72px;
+        }
+
+        
+        #tabAccount .panel {
+          padding: clamp(22px, 4vw, 34px);
+          background: var(--surface);
+          border: 1px solid rgb(216 222 216 / 90%);
+          border-radius: var(--radius);
+          box-shadow: var(--shadow);
+        }
+
+        
+        #tabAccount .panel + .panel, #tabAccount .workspace-grid {
+          margin-top: 22px;
+        }
+
+        
+        #tabAccount .panel-heading, #tabAccount .subsection-heading, #tabAccount .button-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        
+        #tabAccount .panel-heading {
+          margin-bottom: 26px;
+        }
+
+        
+        #tabAccount .step-label {
+          color: var(--green);
+        }
+
+        
+        #tabAccount .badge {
+          flex: 0 0 auto;
+          padding: 5px 10px;
+          color: var(--green-dark);
+          background: var(--green-soft);
+          border: 1px solid #c2dfcc;
+          border-radius: 999px;
+          font-size: 0.75rem;
+          font-weight: 750;
+        }
+
+        
+        #tabAccount .badge--admin {
+          color: #8b4818;
+          background: var(--orange-soft);
+          border-color: #f2d1ae;
+        }
+
+        
+        #tabAccount .two-column, #tabAccount .workspace-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 22px;
+        }
+
+        
+        #tabAccount .action-card {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          min-height: 278px;
+          padding: 22px;
+          background: var(--surface-soft);
+          border: 1px solid var(--line);
+          border-radius: 14px;
+        }
+
+        
+        #tabAccount .action-card > .button {
+          margin-top: auto;
+        }
+
+        
+        #tabAccount .action-card p, #tabAccount .support-note {
+          color: var(--muted);
+          font-size: 0.9rem;
+        }
+
+        
+        #tabAccount .support-note {
+          margin: 0;
+          text-align: center;
+        }
+
+        
+        #tabAccount label {
+          display: block;
+          margin-bottom: -7px;
+          color: #35443a;
+          font-size: 0.84rem;
+          font-weight: 750;
+        }
+
+        
+        #tabAccount input, #tabAccount select, #tabAccount textarea {
+          width: 100%;
+          padding: 11px 13px;
+          color: var(--ink);
+          background: #fff;
+          border: 1px solid #bdc8bf;
+          border-radius: 9px;
+          outline: none;
+          transition: border-color 120ms ease, box-shadow 120ms ease;
+        }
+
+        
+        #tabAccount textarea {
+          resize: vertical;
+        }
+
+        
+        #tabAccount input:focus, #tabAccount select:focus, #tabAccount textarea:focus {
+          border-color: var(--green);
+          box-shadow: 0 0 0 3px rgb(23 101 59 / 13%);
+        }
+
+        
+        #tabAccount .button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 44px;
+          padding: 10px 16px;
+          border: 1px solid transparent;
+          border-radius: 9px;
+          font-weight: 750;
+          line-height: 1.2;
+          transition: transform 100ms ease, background-color 120ms ease, border-color 120ms ease;
+        }
+
+        
+        #tabAccount .button:not(:disabled):active {
+          transform: translateY(1px);
+        }
+
+        
+        #tabAccount .button:focus-visible, #tabAccount summary:focus-visible, #tabAccount a:focus-visible {
+          outline: 3px solid rgb(197 106 34 / 35%);
+          outline-offset: 3px;
+        }
+
+        
+        #tabAccount .button--primary {
+          color: #fff;
+          background: var(--green);
+          border-color: var(--green);
+        }
+
+        
+        #tabAccount .button--primary:hover:not(:disabled) {
+          background: var(--green-dark);
+        }
+
+        
+        #tabAccount .button--secondary {
+          color: var(--green-dark);
+          background: var(--green-soft);
+          border-color: #acd2ba;
+        }
+
+        
+        #tabAccount .button--quiet {
+          color: #35443a;
+          background: #fff;
+          border-color: var(--line);
+        }
+
+        
+        #tabAccount .button--danger {
+          color: var(--red);
+          background: var(--red-soft);
+          border-color: #efc2bd;
+        }
+
+        
+        #tabAccount .button--small {
+          min-height: 36px;
+          padding: 7px 11px;
+          font-size: 0.82rem;
+        }
+
+        
+        #tabAccount .flash {
+          margin-bottom: 16px;
+          padding: 13px 16px;
+          color: var(--green-dark);
+          background: #edf8f0;
+          border: 1px solid #b9dbc4;
+          border-radius: 11px;
+          box-shadow: 0 7px 20px rgb(37 55 45 / 6%);
+        }
+
+        
+        #tabAccount .flash--error {
+          color: #792720;
+          background: var(--red-soft);
+          border-color: #e7b9b4;
+        }
+
+        
+        #tabAccount .flash--warning {
+          color: #794212;
+          background: var(--orange-soft);
+          border-color: #edc69e;
+        }
+
+        
+        #tabAccount .identity-panel {
+          border-top: 4px solid var(--green);
+        }
+
+        
+        #tabAccount .detail-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+          margin: 0;
+        }
+
+        
+        #tabAccount .detail-grid div {
+          min-width: 0;
+          padding: 13px;
+          background: var(--surface-soft);
+          border-radius: 10px;
+        }
+
+        
+        #tabAccount .detail-grid dt, #tabAccount .result-list dt {
+          color: var(--muted);
+          font-size: 0.76rem;
+          font-weight: 750;
+        }
+
+        
+        #tabAccount .detail-grid dd, #tabAccount .result-list dd {
+          margin: 2px 0 0;
+          font-weight: 700;
+          overflow-wrap: anywhere;
+        }
+
+        
+        #tabAccount .technical-details {
+          margin-top: 16px;
+          color: var(--muted);
+          font-size: 0.82rem;
+        }
+
+        
+        #tabAccount .technical-details summary, #tabAccount .bootstrap-fields summary {
+          cursor: pointer;
+          font-weight: 700;
+        }
+
+        
+        #tabAccount .bootstrap-fields {
+          color: var(--muted);
+          font-size: 0.84rem;
+        }
+
+        
+        #tabAccount .bootstrap-fields > p {
+          margin: 8px 0 12px;
+          font-size: 0.8rem;
+        }
+
+        
+        #tabAccount .bootstrap-fields .stack-form {
+          padding: 14px;
+          background: rgb(255 255 255 / 62%);
+          border: 1px solid var(--line);
+          border-radius: 9px;
+        }
+
+        
+        #tabAccount .technical-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          margin-top: 12px;
+        }
+
+        
+        #tabAccount code {
+          max-width: 100%;
+          padding: 2px 5px;
+          color: #315440;
+          background: #edf2ec;
+          border-radius: 5px;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          font-size: 0.82rem;
+          overflow-wrap: anywhere;
+        }
+
+        
+        #tabAccount .workspace-grid {
+          align-items: start;
+        }
+
+        
+        #tabAccount .panel--wide {
+          grid-column: 1 / -1;
+        }
+
+        
+        #tabAccount .stack-form {
+          display: grid;
+          gap: 12px;
+        }
+
+        
+        #tabAccount .stack-form .button {
+          margin-top: 6px;
+        }
+
+        
+        #tabAccount .subsection-heading {
+          margin: 32px 0 12px;
+          padding-top: 20px;
+          border-top: 1px solid var(--line);
+        }
+
+        
+        #tabAccount .subsection-heading h3 {
+          margin: 0;
+        }
+
+        
+        #tabAccount .empty-state, #tabAccount .empty-cell {
+          padding: 20px;
+          color: var(--muted);
+          text-align: center;
+        }
+
+        
+        #tabAccount .empty-state {
+          background: var(--surface-soft);
+          border: 1px dashed #bdc8bf;
+          border-radius: 10px;
+        }
+
+        
+        #tabAccount .card-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        
+        #tabAccount .record-card {
+          padding: 15px;
+          background: #fff;
+          border: 1px solid var(--line);
+          border-left: 4px solid #98bba4;
+          border-radius: 9px;
+        }
+
+        
+        #tabAccount .record-card h4 {
+          margin: 0 0 5px;
+          font-size: 1rem;
+        }
+
+        
+        #tabAccount .record-card p {
+          margin-bottom: 8px;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+
+        
+        #tabAccount .record-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px 14px;
+          color: var(--muted);
+          font-size: 0.76rem;
+        }
+
+        
+        #tabAccount .result-box, #tabAccount .verification-result {
+          margin-top: 22px;
+          padding: 16px;
+          background: var(--green-soft);
+          border: 1px solid #bdddc8;
+          border-radius: 11px;
+        }
+
+        
+        #tabAccount .result-list {
+          display: grid;
+          gap: 12px;
+          margin: 12px 0;
+        }
+
+        
+        #tabAccount .result-list > div {
+          min-width: 0;
+        }
+
+        
+        #tabAccount .warning-note {
+          margin-bottom: 0;
+          color: #794212;
+          font-size: 0.82rem;
+        }
+
+        
+        #tabAccount .verification-result--invalid {
+          color: #792720;
+          background: var(--red-soft);
+          border-color: #e7b9b4;
+        }
+
+        
+        #tabAccount .table-wrap {
+          margin-top: 18px;
+          overflow-x: auto;
+          border: 1px solid var(--line);
+          border-radius: 11px;
+        }
+
+        
+        #tabAccount table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 0.84rem;
+        }
+
+        
+        #tabAccount th, #tabAccount td {
+          padding: 11px 13px;
+          border-bottom: 1px solid var(--line);
+          text-align: left;
+          vertical-align: top;
+        }
+
+        
+        #tabAccount th {
+          color: #435148;
+          background: var(--surface-soft);
+          font-size: 0.76rem;
+          white-space: nowrap;
+        }
+
+        
+        #tabAccount tbody tr:last-child td {
+          border-bottom: 0;
+        }
+
+        
+        #tabAccount td {
+          overflow-wrap: anywhere;
+        }
+
+        
+        #tabAccount footer {
+          padding: 0 24px 28px;
+          color: var(--muted);
+          font-size: 0.78rem;
+          text-align: center;
+        }
+
+        
+        #tabAccount footer p {
+          margin: 0;
+        }
+
+        
+        #tabAccount [hidden] {
+          display: none !important;
+        }
+
+        
+        @media (max-width: 800px) {
+          #tabAccount .site-header {
+            padding-top: 34px;
+          }
+
+        
+          #tabAccount .header-inner {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+        
+          #tabAccount .status-card {
+            min-width: 0;
+          }
+
+        
+          #tabAccount .two-column, #tabAccount .workspace-grid {
+            grid-template-columns: 1fr;
+          }
+
+        
+          #tabAccount .panel--wide {
+            grid-column: auto;
+          }
+
+        
+          #tabAccount .detail-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+}
+
+        
+        @media (max-width: 520px) {
+          #tabAccount .site-header {
+            padding-right: 16px;
+            padding-left: 16px;
+          }
+
+        
+          #tabAccount .shell {
+            padding-right: 12px;
+            padding-left: 12px;
+          }
+
+        
+          #tabAccount .panel-heading, #tabAccount .subsection-heading {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+        
+          #tabAccount .panel-heading .button-row, #tabAccount .subsection-heading .button {
+            width: 100%;
+          }
+
+        
+          #tabAccount .button-row .button {
+            flex: 1;
+          }
+
+        
+          #tabAccount .detail-grid {
+            grid-template-columns: 1fr;
+          }
+
+        
+          #tabAccount .technical-row {
+            flex-direction: column;
+          }
+}
+
+        
+        @media (prefers-reduced-motion: reduce) {
+          #tabAccount *, #tabAccount *::before, #tabAccount *::after {
+            scroll-behavior: auto !important;
+            transition-duration: 0.01ms !important;
+          }
+}
+</style>
 </head>
-<body>
+<body><div id="topTabs" class="top-tabs">
+    <button class="top-tab active" data-tab="studio">🖼 検品</button>
+    <button class="top-tab" data-tab="account">🔑 アカウント</button>
+</div>
+<div id="tabStudio" class="tab-page">
 
     <!-- ドラッグ範囲選択用の矩形要素 -->
     <div id="pendingSelectBox" class="pending-select-box"></div>
@@ -828,8 +1633,21 @@
                 </div>
 
                                 <div id="templateTools" class="controls-sub" style="display:none;">
+                    <button id="tplPaneToggle" class="btn-secondary" style="font-size:11px; padding:3px 8px;">◧ 棚を隠す</button>
                     <span style="font-size:11px; color:var(--text-sub);">ひな形</span>
                     <div id="tplTabs" style="display:flex; gap:3px; flex-wrap:wrap;"></div>
+                    <span style="font-size:10px; color:var(--text-sub);">置く</span>
+                    <button class="btn-secondary tpl-add" data-part="burst" style="font-size:11px; padding:3px 7px;">＋爆発</button>
+                    <button class="btn-secondary tpl-add" data-part="bar" style="font-size:11px; padding:3px 7px;">＋帯</button>
+                    <button class="btn-secondary tpl-add" data-part="slot" style="font-size:11px; padding:3px 7px;">＋写真枠</button>
+                    <span id="partPerm" style="display:none; gap:2px; align-items:center;">
+                        <span style="font-size:10px; color:var(--text-sub); margin-left:4px;">この部品</span>
+                        <button id="perm_move" class="btn-secondary" style="font-size:10px; padding:3px 6px;" title="動かしてよいか">動○</button>
+                        <button id="perm_text" class="btn-secondary" style="font-size:10px; padding:3px 6px;" title="文字を変えてよいか">文○</button>
+                        <button id="perm_size" class="btn-secondary" style="font-size:10px; padding:3px 6px;" title="大きさを変えてよいか">大○</button>
+                        <button id="partDelBtn" class="btn-secondary" style="font-size:10px; padding:3px 6px; background:#c62828; color:#fff;">消す</button>
+                    </span>
+                    <button id="tplSaveBtn" class="btn-secondary" style="font-size:11px; padding:3px 8px; background:#0f9d58; color:#fff;">ひな形として保存</button>
                     <button id="tplClearBtn" class="btn-secondary" style="font-size:11px; padding:3px 8px;">外す</button>
                     <span id="tplHint" style="font-size:10px; color:var(--text-sub);"></span>
                 </div>
@@ -863,6 +1681,20 @@
                     <span id="dlBtnText">この1枚をDL</span>
                 </button>
 
+                <div id="tplPane" class="tpl-pane" style="display:none;">
+                    <div class="tpl-pane-head">
+                        <b>共通・ひな形</b>
+                        <button id="tplPaneToggle2" class="icon-btn" title="閉じる">✕</button>
+                    </div>
+                    <div class="tpl-pane-tabs">
+                        <button class="tpl-tab active" data-kind="common">共通</button>
+                        <button class="tpl-tab" data-kind="tpl">ひな形</button>
+                    </div>
+                    <div id="tplGallery" class="tpl-list"></div>
+                    <div class="tpl-pane-note">
+                        共通は作業画面へドラッグすると取り込みます。<br>名前は鉛筆で変えられます。
+                    </div>
+                </div>
                 <canvas id="editorCanvas" width="1200" height="1200"></canvas>
 
                 <!-- 表示ズーム中に「今どこが画面の中心か」を示す目印 -->
@@ -910,8 +1742,8 @@
 
         <div class="sidebar" id="sidebarDropArea">
             <div class="sidebar-toolbar">
-                <span style="font-weight:bold; font-size:12px; color:#28a745;">✓ 完了済み</span>
-                <div style="display:flex; gap:4px;">
+                <span style="font-weight:bold; font-size:12px; color:#28a745; white-space:nowrap;">✓ 完了済み</span>
+                <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
                     <button id="downloadZipBtn" class="btn-zip" style="font-size:10px; padding:3px 6px;">📦 ZIP一括DL</button>
                     <button id="exportDriveBtn" class="btn-drive" style="font-size:10px; padding:3px 6px; display:none;" title="接続中のフォルダへ直接書き出す">💾 フォルダへ書出</button>
                     <button id="shareBtn" class="btn-drive" style="font-size:10px; padding:3px 6px; display:none; background:#0f9d58;" title="Googleドライブ・LINE・メールなどへ送る">📤 共有</button>
@@ -1197,14 +2029,234 @@
         </div>
     </div>
 
-    <script>
+    </div>
+</div>
+<div id="tabAccount" class="tab-page" hidden><div class="kiban-inner">
+    <header class="site-header">
+      <div class="header-inner">
+        <div>
+          <p class="eyebrow">SHARED SECURITY FOUNDATION</p>
+          <h1>共通セキュリティ基盤</h1>
+          <p class="lede">パスキー認証・所属センター権限・暗号化記録・監査チェーンの接続確認画面</p>
+        </div>
+        <div class="status-card" aria-live="polite">
+          <span id="backend-status-dot" class="status-dot status-dot--pending" aria-hidden="true"></span>
+          <div>
+            <span class="status-label">バックエンド</span>
+            <strong id="backend-status">確認中</strong>
+            <small id="backend-version">—</small>
+          </div>
+          <button id="check-status-button" class="button button--quiet button--small" type="button">再確認</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="shell">
+      <div id="flash" class="flash" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+
+      <section id="signed-out-section" class="panel" aria-labelledby="authentication-heading">
+        <div class="panel-heading">
+          <div>
+            <p class="step-label">STEP 1</p>
+            <h2 id="authentication-heading">本人確認</h2>
+          </div>
+          <span class="badge">パスワード不要</span>
+        </div>
+
+        <div class="two-column">
+          <form id="registration-form" class="action-card">
+            <div>
+              <h3>はじめて登録する</h3>
+              <p>管理者から受け取った初期設定トークン、または招待トークンを貼り付けてください。</p>
+            </div>
+            <label for="registration-token">登録トークン</label>
+            <textarea
+              id="registration-token"
+              name="token"
+              rows="3"
+              required
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              placeholder="ここにトークンを貼り付け"
+            ></textarea>
+            <details class="bootstrap-fields">
+              <summary>初回管理者として設定する場合</summary>
+              <p>招待トークンで登録する場合、この3項目は入力不要です。</p>
+              <div class="stack-form">
+                <label for="bootstrap-email">管理者メールアドレス</label>
+                <input id="bootstrap-email" name="email" type="email" autocomplete="email" placeholder="admin@example.jp">
+
+                <label for="bootstrap-display-name">管理者の表示名</label>
+                <input id="bootstrap-display-name" name="display_name" type="text" maxlength="100" autocomplete="name" placeholder="例：三田 大咲">
+
+                <label for="bootstrap-center-code">最初のセンターコード</label>
+                <input id="bootstrap-center-code" name="center_code" type="text" maxlength="32" value="GU1" autocomplete="off" autocapitalize="characters">
+              </div>
+            </details>
+            <button id="registration-button" class="button button--primary" type="submit">この端末にパスキーを登録</button>
+          </form>
+
+          <div class="action-card">
+            <div>
+              <h3>登録済みの方</h3>
+              <p>端末の画面ロック、指紋、または顔認証を使います。メールアドレスの入力は不要です。</p>
+            </div>
+            <button id="login-button" class="button button--secondary" type="button">パスキーでログイン</button>
+            <p id="passkey-support" class="support-note">このブラウザのパスキー対応を確認中です。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="signed-in-section" hidden>
+        <section class="panel identity-panel" aria-labelledby="identity-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="step-label">SIGNED IN</p>
+              <h2 id="identity-heading">現在のセッション</h2>
+            </div>
+            <div class="button-row">
+              <button id="refresh-me-button" class="button button--quiet button--small" type="button">再取得</button>
+              <button id="logout-button" class="button button--danger button--small" type="button">ログアウト</button>
+            </div>
+          </div>
+          <dl id="identity-details" class="detail-grid"></dl>
+          <details class="technical-details">
+            <summary>接続確認用の内部情報</summary>
+            <div class="technical-row">
+              <span>CSRF</span>
+              <code id="csrf-value">未取得</code>
+            </div>
+            <p>この値は現在のタブのメモリにだけ保持され、ブラウザ保存領域には書き込みません。</p>
+          </details>
+        </section>
+
+        <div class="workspace-grid">
+          <section class="panel" aria-labelledby="records-heading">
+            <div class="panel-heading">
+              <div>
+                <p class="step-label">PROTECTED DATA</p>
+                <h2 id="records-heading">暗号化デモ記録</h2>
+              </div>
+            </div>
+            <form id="record-form" class="stack-form">
+              <label for="record-center-id">センターID</label>
+              <input id="record-center-id" name="center_id" type="text" required autocomplete="off" placeholder="センターID">
+
+              <label for="record-title">タイトル</label>
+              <input id="record-title" name="title" type="text" maxlength="120" required autocomplete="off" placeholder="例：引き継ぎメモ">
+
+              <label for="record-secret">機微情報</label>
+              <textarea id="record-secret" name="secret" rows="4" maxlength="4000" required placeholder="暗号化して保管する内容"></textarea>
+
+              <button id="create-record-button" class="button button--primary" type="submit">記録を作成</button>
+            </form>
+
+            <div class="subsection-heading">
+              <h3>センターの記録</h3>
+              <button id="list-records-button" class="button button--quiet button--small" type="button">一覧を更新</button>
+            </div>
+            <div id="records-empty" class="empty-state">センターIDを入力して「一覧を更新」を押してください。</div>
+            <div id="records-list" class="card-list" aria-live="polite"></div>
+          </section>
+
+          <section id="admin-panel" class="panel" aria-labelledby="invite-heading" hidden>
+            <div class="panel-heading">
+              <div>
+                <p class="step-label">ADMIN</p>
+                <h2 id="invite-heading">利用者を招待</h2>
+              </div>
+              <span class="badge badge--admin">管理者</span>
+            </div>
+            <form id="invite-form" class="stack-form">
+              <label for="invite-email">メールアドレス</label>
+              <input id="invite-email" name="email" type="email" required autocomplete="email" placeholder="name@example.jp">
+
+              <label for="invite-display-name">表示名</label>
+              <input id="invite-display-name" name="display_name" type="text" maxlength="100" required autocomplete="name" placeholder="例：山田 花子">
+
+              <label for="invite-center-code">センターコード</label>
+              <input id="invite-center-code" name="center_code" type="text" maxlength="32" required autocomplete="off" autocapitalize="characters" placeholder="例：GU1">
+
+              <label for="invite-role">権限</label>
+              <select id="invite-role" name="role" required>
+                <option value="worker">作業者（worker）</option>
+                <option value="checker">確認者（checker）</option>
+                <option value="lead">リーダー（lead）</option>
+                <option value="admin">管理者（admin）</option>
+              </select>
+
+              <button id="create-invite-button" class="button button--primary" type="submit">招待を発行</button>
+            </form>
+            <div id="invite-result" class="result-box" hidden>
+              <h3>招待を発行しました</h3>
+              <dl class="result-list">
+                <div>
+                  <dt>登録URL</dt>
+                  <dd><a id="invite-url" href="#" rel="noreferrer">—</a></dd>
+                </div>
+                <div>
+                  <dt>招待トークン</dt>
+                  <dd><code id="invite-token">—</code></dd>
+                </div>
+                <div>
+                  <dt>有効期限</dt>
+                  <dd id="invite-expires">—</dd>
+                </div>
+              </dl>
+              <p class="warning-note">URLまたはトークンは安全な経路で本人にだけ渡してください。この画面を閉じると再表示できません。</p>
+            </div>
+          </section>
+
+          <section class="panel panel--wide" aria-labelledby="audit-heading">
+            <div class="panel-heading">
+              <div>
+                <p class="step-label">AUDIT CHAIN</p>
+                <h2 id="audit-heading">監査ログ</h2>
+              </div>
+              <div class="button-row">
+                <button id="list-audit-button" class="button button--quiet button--small" type="button">ログを取得</button>
+                <button id="verify-audit-button" class="button button--secondary button--small" type="button">チェーンを検証</button>
+              </div>
+            </div>
+            <label for="audit-center-id">センターID</label>
+            <input id="audit-center-id" name="center_id" type="text" required autocomplete="off" placeholder="センターID">
+            <div id="audit-verification" class="verification-result" hidden></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">日時</th>
+                    <th scope="col">操作</th>
+                    <th scope="col">主体</th>
+                    <th scope="col">対象</th>
+                    <th scope="col">イベントID</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-rows">
+                  <tr>
+                    <td colspan="5" class="empty-cell">センターIDを入力してログを取得してください。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>同一オリジン接続確認用UI — 認証情報や権限をブラウザだけで決定しません。</p>
+    </footer>
+  </div></div>
+<script>
         // ============================================================
         //  バージョン。中身を変更したら必ずここを上げる。
         //  画面右上に表示されるので、「修正したのに変わらない」がキャッシュか
         //  実装漏れかを即座に切り分けられる。
         // ============================================================
-        const APP_VERSION = '0.20.0-beta';
-        const APP_BUILD = '20260907-1800';
+        const APP_VERSION = '0.24.0-beta';
+        const APP_BUILD = '20260908-1000';
 
         const upload = document.getElementById('upload');
         const folderUpload = document.getElementById('folderUpload');
@@ -1376,7 +2428,8 @@
         // ============================================================
         const splitter = document.getElementById('splitter');
         const appContainer = document.querySelector('.app-container');
-        const SIDEBAR_MIN = 200;
+        // 200pxだとボタンが収まらず、はみ出して読めなくなる。
+        const SIDEBAR_MIN = 280;
         const DEFAULT_SIDEBAR_WIDTH = 360;
 
         function clampSidebarWidth(px) {
@@ -1390,6 +2443,16 @@
             sidebarDropArea.style.width = w + 'px';
             return w;
         }
+
+        // 窓の大きさが変わった時に計算し直す。
+        // これが無いと、狭い窓で開いた幅のまま固定されてしまう。
+        let sidebarResizeTimer = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(sidebarResizeTimer);
+            sidebarResizeTimer = setTimeout(() => {
+                applySidebarWidth(uiConfig.sidebarWidth || DEFAULT_SIDEBAR_WIDTH);
+            }, 120);
+        });
 
         let splitterDragging = false;
         splitter.addEventListener('pointerdown', (e) => {
@@ -2633,6 +3696,8 @@
 
         async function initWorkerLink() {
             workerSession = await loadWorkerSession();
+            if (typeof updateAdminTabs === 'function') updateAdminTabs();
+            if (workerSession && typeof fetchSharedTemplates === 'function') fetchSharedTemplates();
             if (workerSession) {
                 workerBadge(true, '分類の判定は基盤が代理で行います。鍵はこの端末にありません。');
             } else {
@@ -5890,7 +6955,25 @@
         modeVignetteBtn.addEventListener('click', () => setMode('vignette'));
         modeMaskBtn.addEventListener('click', () => setMode('mask'));
         modeArrowBtn.addEventListener('click', () => setMode('arrow'));
-        document.getElementById('tplClearBtn').addEventListener('click', () => { clearTemplate(); buildTemplateTabs(); });
+        document.querySelectorAll('.tpl-add').forEach(b =>
+            b.addEventListener('click', () => addPart(b.getAttribute('data-part'))));
+        document.getElementById('perm_move').addEventListener('click', () => togglePartPerm('move'));
+        document.getElementById('perm_text').addEventListener('click', () => togglePartPerm('text'));
+        document.getElementById('perm_size').addEventListener('click', () => togglePartPerm('size'));
+        document.getElementById('partDelBtn').addEventListener('click', removeSelectedPart);
+        document.getElementById('tplSaveBtn').addEventListener('click', saveAsTemplate);
+        document.getElementById('tplClearBtn').addEventListener('click', () => {
+            clearTemplate(); buildTemplateTabs(); renderTemplateGallery();
+        });
+
+        // 見本が邪魔な時は畳める
+        document.getElementById('tplPaneToggle').addEventListener('click', () => {
+            tplPaneHidden = !tplPaneHidden;
+            const pane = document.getElementById('tplPane');
+            if (pane) pane.style.display = tplPaneHidden ? 'none' : '';
+            document.getElementById('tplPaneToggle').textContent =
+                tplPaneHidden ? '◧ 見本を出す' : '◧ 見本を隠す';
+        });
         document.getElementById('modeTemplateBtn').addEventListener('click', () => setMode('template'));
 
         function setMode(mode) {
@@ -5908,7 +6991,9 @@
             document.getElementById('modeTemplateBtn').classList.toggle('active', mode === 'template');
             const tt = document.getElementById('templateTools');
             if (tt) tt.style.display = mode === 'template' ? 'flex' : 'none';
-            if (mode === 'template') buildTemplateTabs();
+            const pane = document.getElementById('tplPane');
+            if (pane) pane.style.display = (mode === 'template' && !tplPaneHidden) ? '' : 'none';
+            if (mode === 'template') { buildTemplateTabs(); renderTemplateGallery(); updateAdminTabs(); }
 
             selectTools.style.display = mode === 'select' ? 'flex' : 'none';
             vignetteTools.style.display = mode === 'vignette' ? 'flex' : 'none';
@@ -6447,7 +7532,7 @@
                 // 選んでいる部品の角を先に見る。角は部品の外にもはみ出しているため。
                 if (tplSelectedPart) {
                     const sel = item.tpl.parts.find(q => q.id === tplSelectedPart);
-                    const def = sel ? partDef(item.tpl.id, sel.id) : null;
+                    const def = sel ? defOf(item.tpl, sel) : null;
                     if (sel && def && def.perm.size) {
                         const c = tplCornerAt(pos, sel);
                         if (c) {
@@ -6461,9 +7546,10 @@
                     }
                 }
                 const hit = tplPartAt(pos);
-                if (!hit) { tplSelectedPart = null; refreshMainCanvas(); return; }
+                if (!hit) { tplSelectedPart = null; updatePartPermUI(); refreshMainCanvas(); return; }
                 tplSelectedPart = hit.id;
-                const def = partDef(item.tpl.id, hit.id);
+                updatePartPermUI();
+                const def = defOf(item.tpl, hit);
                 refreshMainCanvas();
                 if (def && def.perm.move) {
                     saveState();
@@ -7018,10 +8104,11 @@
             if (!t) return null;
             return {
                 id: t.id,
-                parts: t.parts.map(p => ({
-                    id: p.id, x: p.x, y: p.y, w: p.w, h: p.h,
-                    lines: p.lines ? p.lines.slice() : null,
-                    text: p.text !== undefined ? p.text : null,
+                // 中身を丸ごと写す。作ったひな形は型や権限を部品自身が持つため、
+                // 決まった項目だけを写すと、それらが落ちてしまう。
+                parts: t.parts.map(p => Object.assign({}, p, {
+                    lines: p.lines ? p.lines.slice() : (p.lines === undefined ? undefined : null),
+                    perm: p.perm ? Object.assign({}, p.perm) : undefined,
                     img: null,          // 使用例に差し込んだ写真
                     _im: null           // 描画用。保存しない
                 }))
@@ -7031,6 +8118,16 @@
         function partDef(tplId, partId) {
             const t = findTemplate(tplId);
             return t ? t.parts.find(p => p.id === partId) || null : null;
+        }
+
+        /**
+         * その部品の中身（型・色・権限）を取り出す。
+         * 作ったひな形の部品は自分で持っている。
+         * 元から入っているひな形の部品は TEMPLATES 側にある。
+         */
+        function defOf(st, p) {
+            if (p && p.type) return p;
+            return partDef(st.id, p.id);
         }
 
         // --- 描く ---------------------------------------------------
@@ -7132,10 +8229,8 @@
         function drawTemplate(g, item, forExport) {
             const st = item && item.tpl;
             if (!st) return;
-            const t = findTemplate(st.id);
-            if (!t) return;
             st.parts.forEach(p => {
-                const def = partDef(st.id, p.id);
+                const def = defOf(st, p);
                 if (!def) return;
                 g.save();
                 if (def.type === 'burst') drawBurst(g, p, def);
@@ -7150,7 +8245,7 @@
             const st = item && item.tpl;
             if (!st || currentMode !== 'template') return;
             st.parts.forEach(p => {
-                const def = partDef(st.id, p.id);
+                const def = p.kind === 'asset' ? { perm: p.perm } : defOf(st, p);
                 if (!def) return;
                 const on = (tplSelectedPart === p.id);
                 g.save();
@@ -7170,6 +8265,7 @@
         }
 
         // --- 触る ---------------------------------------------------
+        let tplPaneHidden = false;
         let tplSelectedPart = null;
         let tplDrag = null;      // { mode:'move'|'size', id, sx, sy, ox, oy, ow, oh }
 
@@ -7288,7 +8384,7 @@
         // 文字の打ち替え。ダブルクリックで開く。
         function editTemplateText(part) {
             const item = getActiveItem();
-            const def = partDef(item.tpl.id, part.id);
+            const def = defOf(item.tpl, part);
             if (!def || !def.perm.text) {
                 status.innerText = 'この部品の文字は変えられません。';
                 return;
@@ -7336,6 +8432,575 @@
         window.addEventListener('dragover', (e) => {
             if (tplDropTarget(e)) { e.preventDefault(); e.stopImmediatePropagation(); }
         }, true);
+
+
+        // ============================================================
+        //  画面のタブ
+        //  入口を1つにする。URLが分かれていると、どこを開くか分からなくなる。
+        // ============================================================
+        (function () {
+            const pages = { studio: 'tabStudio', account: 'tabAccount' };
+            function show(name) {
+                Object.keys(pages).forEach(k => {
+                    const el = document.getElementById(pages[k]);
+                    if (el) el.hidden = (k !== name);
+                });
+                document.querySelectorAll('.top-tab').forEach(b =>
+                    b.classList.toggle('active', b.getAttribute('data-tab') === name));
+                try { localStorage.setItem('photoStudioTab', name); } catch (e) {}
+                // 隠れている間に窓の大きさが変わっていることがあるので、戻った時に整える
+                if (name === 'studio') setTimeout(() => window.dispatchEvent(new Event('resize')), 30);
+            }
+            document.querySelectorAll('.top-tab').forEach(b =>
+                b.addEventListener('click', () => show(b.getAttribute('data-tab'))));
+            let last = 'studio';
+            try { last = localStorage.getItem('photoStudioTab') || 'studio'; } catch (e) {}
+            show(pages[last] ? last : 'studio');
+            window.__showTab = show;
+        })();
+
+        /** 管理する人かどうか。ひな形を作り替えられるのはこの人だけ。 */
+        function isTemplateAdmin() {
+            const roles = (workerSession && workerSession.memberships || []).map(m => m.role);
+            return roles.indexOf('admin') >= 0 || roles.indexOf('lead') >= 0;
+        }
+        function updateAdminTabs() {
+            const box = document.getElementById('tplPaneAdmin');
+            if (box) box.style.display = isTemplateAdmin() ? '' : 'none';
+        }
+
+        // 棚の中身。「共通」と「ひな形」の2つ。
+        //
+        //   共通    写真そのもの。取り込めばその商品の写真になる（撮影が要らない）
+        //   ひな形  写真の上に重ねる部品。写真は別に要る
+        //
+        // この2つは別物なので、混ぜない。
+        let tplPaneKind = 'common';
+
+        function renderTemplateGallery() {
+            const box = document.getElementById('tplGallery');
+            if (!box) return;
+            box.innerHTML = '';
+            if (tplPaneKind === 'tpl') { renderTemplateList(box); return; }
+
+            if (!assetHandle) {
+                box.innerHTML = '<div class="tpl-empty">共通のフォルダがまだ選ばれていません。<br>'
+                    + '共通ごとにフォルダを作って、その中に写真を入れておきます。</div>';
+                const b = document.createElement('button');
+                b.className = 'btn-secondary';
+                b.style.cssText = 'width:100%; font-size:10px; padding:5px;';
+                b.textContent = '📂 共通フォルダを選ぶ';
+                b.addEventListener('click', connectAssetFolder);
+                box.appendChild(b);
+                return;
+            }
+
+            const cat = uiConfig.selectedCategory || 'RB';
+            // 分類のフォルダがあれば、その分類のものを先に出す
+            const sets = (assetIndex.cats[cat] || []).concat(assetIndex.common);
+            if (!sets.length) {
+                box.innerHTML = '<div class="tpl-empty">'
+                    + (tplPaneKind === 'common'
+                        ? 'フォルダの中に、共通ごとのフォルダを作ってください。'
+                        : '「' + cat + '」というフォルダの中に、共通ごとのフォルダを作ってください。')
+                    + '</div>';
+                return;
+            }
+
+            sets.forEach(set => {
+                const row = document.createElement('div');
+                row.className = 'tpl-asset';
+                row.draggable = true;
+
+                const im = document.createElement('img');
+                if (set.files.length) {
+                    set.files[0].getFile().then(f => { im.src = URL.createObjectURL(f); }).catch(() => {});
+                }
+                row.appendChild(im);
+
+                const nm = document.createElement('div');
+                nm.className = 'nm';
+                nm.innerHTML = '<b>' + assetLabel(set.key, set.fallback) + '</b>'
+                    + '<br><span style="color:var(--text-sub);">' + set.files.length + ' 枚</span>';
+                row.appendChild(nm);
+
+                const ren = document.createElement('button');
+                ren.className = 'icon-btn ren';
+                ren.innerHTML = '✏️';
+                ren.title = '名前を変える';
+                ren.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    const v = prompt('この共通の名前', assetLabel(set.key, set.fallback));
+                    if (v === null) return;
+                    if (v.trim()) assetNames[set.key] = v.trim(); else delete assetNames[set.key];
+                    saveAssetNames();
+                    renderTemplateGallery();
+                });
+                row.appendChild(ren);
+
+                row.addEventListener('dragstart', (ev) => {
+                    ev.dataTransfer.effectAllowed = 'copy';
+                    ev.dataTransfer.setData('text/plain', set.key);
+                    draggingSet = set;
+                });
+                row.addEventListener('dragend', () => { draggingSet = null; });
+                row.addEventListener('dblclick', () => importAssetSet(set));
+                box.appendChild(row);
+            });
+        }
+
+        /** ひな形の一覧。1個ずつの見本として出す。部品には割らない。 */
+        function renderTemplateList(box) {
+            const cat = uiConfig.selectedCategory || 'RB';
+            const item = getActiveItem();
+            const nowId = item && item.tpl ? item.tpl.id : null;
+            const fit = templatesForCategory(cat).map(t => t.id);
+            const order = fit.concat(TEMPLATES.map(t => t.id).filter(id => fit.indexOf(id) < 0));
+            order.forEach((id, i) => {
+                const t = findTemplate(id);
+                if (!t) return;
+                const card = document.createElement('div');
+                card.className = 'tpl-card' + (nowId === id ? ' on' : '');
+                const cv = document.createElement('canvas');
+                cv.width = 360; cv.height = 360;
+                const g = cv.getContext('2d');
+                g.fillStyle = '#e9e9e9'; g.fillRect(0, 0, 360, 360);
+                g.fillStyle = '#b3b3b3';
+                g.font = 'bold 15px "Yu Gothic", sans-serif';
+                g.textAlign = 'center'; g.textBaseline = 'middle';
+                g.fillText('ここに写真', 180, 130);
+                g.save(); g.scale(0.3, 0.3);
+                drawTemplate(g, { tpl: makeTemplateState(t.id) }, false);
+                g.restore();
+                card.appendChild(cv);
+                const h = document.createElement('h4');
+                h.textContent = (i === 0 && fit.indexOf(id) === 0 ? '自動 ' : '') + t.name;
+                card.appendChild(h);
+
+                if (t.mine) {
+                    const w = document.createElement('div');
+                    w.className = 'cats';
+                    w.textContent = t.shared ? '全員が使えます' : 'この端末だけ';
+                    w.style.color = t.shared ? '#0f9d58' : 'var(--text-sub)';
+                    card.appendChild(w);
+                }
+
+                card.addEventListener('click', () => { applyTemplate(t.id); renderTemplateGallery(); });
+                if (t.mine) {
+                    const del = document.createElement('button');
+                    del.className = 'icon-btn';
+                    del.innerHTML = '🗑';
+                    del.title = 'このひな形を消す';
+                    del.style.cssText = 'float:right; margin-top:-22px;';
+                    del.addEventListener('click', (ev) => { ev.stopPropagation(); deleteTemplate(t.id); });
+                    card.appendChild(del);
+                }
+                box.appendChild(card);
+            });
+        }
+
+        let draggingSet = null;
+
+        /**
+         * 共通を丸ごと取り込む。
+         * 規格品は撮り直す必要がないので、撮影そのものを省く。
+         * 同じ写真が何度も数えられて統計が壊れないよう、共通だと分かる印を付ける。
+         */
+        async function importAssetSet(set) {
+            if (!set || !set.files.length) return;
+            const folder = getActiveFolder();
+            if (!folder) { status.innerText = 'フォルダがありません。'; return; }
+            const label = assetLabel(set.key, set.fallback);
+            if (folder.items.length && !confirm(
+                '「' + label + '」の ' + set.files.length + ' 枚を、いまのフォルダに足します。\n\n'
+                + '（既にある ' + folder.items.length + ' 枚はそのまま残ります）')) return;
+
+            status.innerText = '「' + label + '」を取り込み中...';
+            let n = 0;
+            for (const fh of set.files) {
+                try {
+                    const file = await fh.getFile();
+                    const loaded = await blobToImage(file);
+                    const thumbBlob = await makeThumbnail(loaded.img);
+                    const item = {
+                        id: nextItemId(), file: file, fileName: file.name,
+                        customName: '', autoName: '', userName: '',
+                        img: loaded.img, _objUrl: loaded.url,
+                        thumbBlob: thumbBlob,
+                        thumbUrl: thumbBlob ? URL.createObjectURL(thumbBlob) : loaded.url,
+                        cleanCanvas: createCleanCanvas(loaded.img, 0, 1.0, 0, 0),
+                        hasMaskEdits: false, vignetteShape: null, arrows: [],
+                        imageAngle: 0, imageScale: 1.0, offsetX: 0, offsetY: 0,
+                        editedBlob: null, isDone: false, tpl: null
+                    };
+                    folder.items.push(item);
+                    try {
+                        item.photoStats = await buildPhotoRecord(item);
+                        if (item.photoStats) {
+                            item.photoStats.shared = true;
+                            item.photoStats.sharedSet = label;
+                        }
+                    } catch (e) { console.warn('記録を作れません:', e); }
+                    persistPhoto(item);
+                    n++;
+                } catch (e) { console.warn('取り込めません:', e); }
+            }
+            updateItemNames();
+            renderUI();
+            saveToDB();
+            if (activeItemIndex === -1 && folder.items.length) loadQueueItem(folder.id, 0);
+            status.innerText = '「' + label + '」から ' + n + ' 枚を取り込みました。撮影は不要です。';
+        }
+
+        // 棚から作業画面へ落とす
+        (function () {
+            const area = document.getElementById('dropArea');
+            if (!area) return;
+            area.addEventListener('dragover', (e) => {
+                if (!draggingSet) return;
+                e.preventDefault(); e.stopImmediatePropagation();
+                e.dataTransfer.dropEffect = 'copy';
+            }, true);
+            area.addEventListener('drop', async (e) => {
+                if (!draggingSet) return;
+                e.preventDefault(); e.stopImmediatePropagation();
+                const set = draggingSet; draggingSet = null;
+                await importAssetSet(set);
+            }, true);
+        })();
+
+        document.querySelectorAll('.tpl-tab').forEach(b => {
+            b.addEventListener('click', () => {
+                tplPaneKind = b.getAttribute('data-kind');
+                document.querySelectorAll('.tpl-tab').forEach(x => x.classList.toggle('active', x === b));
+                renderTemplateGallery();
+            });
+        });
+        const tplPaneClose = document.getElementById('tplPaneToggle2');
+        if (tplPaneClose) tplPaneClose.addEventListener('click', () => {
+            tplPaneHidden = true;
+            document.getElementById('tplPane').style.display = 'none';
+            const t = document.getElementById('tplPaneToggle');
+            if (t) t.textContent = '◧ 棚を出す';
+        });
+
+        const ASSET_DIR_KEY = 'assetDirHandle';
+        let assetHandle = null;         // 素材フォルダ
+        let assetIndex = { common: [], cats: {} };   // { name, file, url }
+        let assetNames = {};            // ファイル名 → 付けた名前
+
+        function loadAssetNames() {
+            try { assetNames = JSON.parse(localStorage.getItem('photoStudioAssetNames') || '{}'); }
+            catch (e) { assetNames = {}; }
+        }
+        function saveAssetNames() {
+            try { localStorage.setItem('photoStudioAssetNames', JSON.stringify(assetNames)); }
+            catch (e) {}
+        }
+        function assetLabel(key, fallback) {
+            return assetNames[key] || fallback;
+        }
+
+        /** 素材フォルダを読む。直下が「共通」、サブフォルダが分類。 */
+        /**
+         * 共通のフォルダを読む。1つの共通＝1つのフォルダ。
+         *   直下のフォルダ            → 共通（例: ぷらパレ120）
+         *   分類コードのフォルダの中  → その分類の共通（例: PA/ぷらパレ150）
+         */
+        async function scanAssetFolder(handle) {
+            const idx = { common: [], cats: {} };
+            const isCat = n => /^[A-Z]{2}$/.test(n);
+            const pics = async (dir) => {
+                const out = [];
+                for await (const [fn, fe] of dir.entries()) {
+                    if (fe.kind === 'file' && /\.(jpe?g|png|webp)$/i.test(fn)) out.push(fe);
+                }
+                return out;
+            };
+            for await (const [name, ent] of handle.entries()) {
+                if (ent.kind !== 'directory') continue;
+                if (isCat(name)) {
+                    const sets = [];
+                    for await (const [sn, se] of ent.entries()) {
+                        if (se.kind !== 'directory') continue;
+                        const files = await pics(se);
+                        if (files.length) sets.push({ key: name + '/' + sn, fallback: sn, files: files });
+                    }
+                    if (sets.length) idx.cats[name] = sets;
+                } else {
+                    const files = await pics(ent);
+                    if (files.length) idx.common.push({ key: name, fallback: name, files: files });
+                }
+            }
+            return idx;
+        }
+
+        async function connectAssetFolder() {
+            if (!driveSupported()) { alert(driveUnsupportedReason().replace(/<br>/g, '\n')); return; }
+            try {
+                const h = await window.showDirectoryPicker({ mode: 'read' });
+                assetHandle = h;
+                assetIndex = await scanAssetFolder(h);
+                storeHandle(ASSET_DIR_KEY, h);
+                renderTemplateGallery();
+                const n = assetIndex.common.length
+                    + Object.values(assetIndex.cats).reduce((a, b) => a + b.length, 0);
+                const sheets = assetIndex.common.reduce((a, x) => a + x.files.length, 0)
+                    + Object.values(assetIndex.cats).reduce((a, l) => a + l.reduce((x, y) => x + y.files.length, 0), 0);
+                status.innerText = `共通のフォルダ「${h.name}」を読みました（${n} 件 / ${sheets} 枚）。`;
+            } catch (e) {
+                if (e.name !== 'AbortError') { console.error(e); alert('読み込めませんでした。\n' + (e.message || e)); }
+            }
+        }
+
+        function storeHandle(key, handle) {
+            if (!db) return;
+            try { db.transaction(DB_STORE, 'readwrite').objectStore(DB_STORE).put({ id: key, handle: handle }); }
+            catch (e) { console.warn('フォルダ情報を保存できません:', e); }
+        }
+
+        async function restoreAssetFolder() {
+            if (!db || !driveSupported()) return;
+            try {
+                const req = db.transaction(DB_STORE, 'readonly').objectStore(DB_STORE).get(ASSET_DIR_KEY);
+                req.onsuccess = async () => {
+                    const rec = req.result;
+                    if (!rec || !rec.handle) return;
+                    try {
+                        const perm = await rec.handle.queryPermission({ mode: 'read' });
+                        if (perm !== 'granted') return;         // 押し付けない。使う時に選び直してもらう
+                        assetHandle = rec.handle;
+                        assetIndex = await scanAssetFolder(rec.handle);
+                        if (currentMode === 'template') renderTemplateGallery();
+                    } catch (e) { console.warn('素材フォルダを開けません:', e); }
+                };
+            } catch (e) {}
+        }
+
+        // 中身の宣言が全部そろってから読み込む。
+        // 先に呼ぶと、まだ用意できていない変数に触って止まる。
+        loadAssetNames();
+        loadSavedTemplates();
+        setTimeout(restoreAssetFolder, 800);
+
+        /** 素材を写真に置く。置いた時点で「ひな形の部品」になる。 */
+
+        // ============================================================
+        //  ひな形を作る
+        //   部品を置く → 位置と大きさを直す → 名前を付けて保存
+        // ============================================================
+        const PART_KINDS = [
+            { type: 'burst', label: '爆発', w: 300, h: 300,
+              make: () => ({ lines: ['おすすめ'], bg: '#1e88e5', fg: '#ffffff',
+                             perm: { move: true, text: true, size: true } }) },
+            { type: 'bar', label: '帯', w: 1200, h: 115,
+              make: () => ({ text: '※ここに注意書き', bg: '#ffd400', fg: '#000000',
+                             perm: { move: true, text: true, size: true } }) },
+            { type: 'slot', label: '写真枠', w: 300, h: 240,
+              make: () => ({ label: '使用例', perm: { move: true, text: false, size: true } }) }
+        ];
+
+        /** 部品を1つ置く。ひな形が無ければその場で作る。 */
+        function addPart(type) {
+            const item = getActiveItem();
+            if (!item) { status.innerText = '先に写真を選んでください。'; return; }
+            const kind = PART_KINDS.find(k => k.type === type);
+            if (!kind) return;
+            if (!item.tpl) item.tpl = { id: 'new', parts: [] };
+            saveState();
+            const p = Object.assign({
+                id: 'p' + Date.now().toString(36) + Math.floor(Math.random() * 999),
+                type: type,
+                x: type === 'bar' ? 0 : 450,
+                y: type === 'bar' ? 1085 : 450,
+                w: kind.w, h: kind.h
+            }, kind.make());
+            item.tpl.parts.push(p);
+            tplSelectedPart = p.id;
+            syncActiveItemCanvas(true);
+            refreshMainCanvas();
+            saveToDB();
+            status.innerText = `「${kind.label}」を置きました。動かす・角で大きさ・ダブルクリックで文字。`;
+        }
+
+        /** 選んでいる部品を消す */
+        function removeSelectedPart() {
+            const item = getActiveItem();
+            if (!item || !item.tpl || !tplSelectedPart) { status.innerText = '部品を選んでください。'; return; }
+            saveState();
+            item.tpl.parts = item.tpl.parts.filter(p => p.id !== tplSelectedPart);
+            tplSelectedPart = null;
+            syncActiveItemCanvas(true);
+            refreshMainCanvas();
+            saveToDB();
+            status.innerText = '部品を消しました。';
+        }
+
+        /** 選んでいる部品の「触ってよい範囲」を切り替える */
+        function togglePartPerm(which) {
+            const item = getActiveItem();
+            if (!item || !item.tpl || !tplSelectedPart) { status.innerText = '部品を選んでください。'; return; }
+            const p = item.tpl.parts.find(q => q.id === tplSelectedPart);
+            if (!p) return;
+            if (!p.perm) p.perm = { move: true, text: true, size: true };
+            p.perm[which] = !p.perm[which];
+            refreshMainCanvas();
+            saveToDB();
+            updatePartPermUI();
+            const jp = { move: '動かす', text: '文字', size: '大きさ' }[which];
+            status.innerText = `この部品の「${jp}」を ${p.perm[which] ? '許可' : '禁止'} にしました。`;
+        }
+
+        function updatePartPermUI() {
+            const box = document.getElementById('partPerm');
+            if (!box) return;
+            const item = getActiveItem();
+            const p = (item && item.tpl && tplSelectedPart)
+                ? item.tpl.parts.find(q => q.id === tplSelectedPart) : null;
+            box.style.display = p ? 'flex' : 'none';
+            if (!p) return;
+            const perm = p.perm || { move: true, text: true, size: true };
+            [['move', '動'], ['text', '文'], ['size', '大']].forEach(([k, jp]) => {
+                const b = document.getElementById('perm_' + k);
+                if (!b) return;
+                b.textContent = jp + (perm[k] ? '○' : '×');
+                b.style.background = perm[k] ? '#0f9d58' : 'var(--bg-control)';
+                b.style.color = perm[k] ? '#fff' : 'var(--text-sub)';
+            });
+        }
+
+        // --- 作ったひな形の保存 --------------------------------------
+        function loadSavedTemplates() {
+            let arr = [];
+            try { arr = JSON.parse(localStorage.getItem('photoStudioTemplates') || '[]'); }
+            catch (e) { arr = []; }
+            arr.forEach(t => {
+                if (!TEMPLATES.find(x => x.id === t.id)) TEMPLATES.push(t);
+            });
+        }
+        function persistSavedTemplates() {
+            const mine = TEMPLATES.filter(t => t.mine);
+            try { localStorage.setItem('photoStudioTemplates', JSON.stringify(mine)); }
+            catch (e) { console.warn('ひな形を保存できません:', e); }
+        }
+
+        /** いまの配置に名前を付けて残す */
+        async function saveAsTemplate() {
+            const item = getActiveItem();
+            if (!item || !item.tpl || !item.tpl.parts.length) {
+                status.innerText = '先に部品を置いてください。'; return;
+            }
+            const cur = findTemplate(item.tpl.id);
+            const name = prompt('ひな形の名前',
+                (cur && cur.mine ? cur.name : '') || (uiConfig.selectedCategory || '') + ' 用');
+            if (name === null || !name.trim()) return;
+
+            // 写真そのものは持たせない。位置と見た目だけを残す。
+            const parts = item.tpl.parts
+                .filter(p => p.type)                       // 置いた素材（写真）は含めない
+                .map(({ _im, img, ...rest }) => rest);
+            if (!parts.length) { status.innerText = '残せる部品がありません。'; return; }
+
+            const id = (cur && cur.mine) ? cur.id : 'my' + Date.now().toString(36);
+            const t = {
+                id: id, name: name.trim(), mine: true,
+                cats: [uiConfig.selectedCategory || 'RB'],
+                parts: parts
+            };
+            const i = TEMPLATES.findIndex(x => x.id === id);
+            if (i >= 0) TEMPLATES[i] = t; else TEMPLATES.push(t);
+            item.tpl.id = id;
+            saveToDB();
+
+            // 基盤に繋がっていればサーバーへ。全員が同じものを使えるようにする。
+            let onServer = false;
+            if (workerSession && canManageTemplates) {
+                onServer = await pushSharedTemplate(t);
+                t.shared = onServer;
+            }
+            if (!onServer) persistSavedTemplates();   // 送れなければ端末に残す
+            tplPaneKind = 'tpl';
+            document.querySelectorAll('.tpl-tab').forEach(x =>
+                x.classList.toggle('active', x.getAttribute('data-kind') === 'tpl'));
+            renderTemplateGallery();
+            status.innerText = onServer
+                ? `ひな形「${t.name}」を全員が使えるようにしました。`
+                : `ひな形「${t.name}」をこの端末に残しました。`;
+        }
+
+        async function deleteTemplate(id) {
+            const t = findTemplate(id);
+            if (!t || !t.mine) return;
+            const where = t.shared ? '全員の一覧から' : 'この端末から';
+            if (!confirm(`ひな形「${t.name}」を${where}消します。よろしいですか。`)) return;
+            if (t.shared) {
+                const ok = await dropSharedTemplate(id);
+                if (!ok) { status.innerText = '消せませんでした（権限がないか、繋がっていません）。'; return; }
+            }
+            const i = TEMPLATES.findIndex(x => x.id === id);
+            if (i >= 0) TEMPLATES.splice(i, 1);
+            persistSavedTemplates();
+            renderTemplateGallery();
+            status.innerText = 'ひな形を消しました。';
+        }
+
+
+        // ============================================================
+        //  ひな形の共有
+        //
+        //  端末の中だけに置くと、作った人にしか見えない。
+        //  基盤に繋がっていればサーバーへ置き、全員が同じものを使う。
+        //  繋がっていなければ端末に残す（今までどおり動く）。
+        // ============================================================
+        let canManageTemplates = false;    // 作り替えてよい人か。サーバーが決める。
+
+        async function fetchSharedTemplates() {
+            if (!workerSession) return;
+            try {
+                const r = await fetch('/api/v1/templates', { credentials: 'same-origin' });
+                if (!r.ok) return;
+                const d = await r.json();
+                canManageTemplates = !!d.can_manage;
+                (d.templates || []).forEach(t => {
+                    const one = { id: t.id, name: t.name, cats: t.cats, parts: t.parts, mine: true, shared: true };
+                    const i = TEMPLATES.findIndex(x => x.id === t.id);
+                    if (i >= 0) TEMPLATES[i] = one; else TEMPLATES.push(one);
+                });
+                if (currentMode === 'template') renderTemplateGallery();
+            } catch (e) {
+                console.warn('ひな形を取れません:', e);
+            }
+        }
+
+        async function pushSharedTemplate(t) {
+            if (!workerSession || !canManageTemplates) return false;
+            try {
+                const r = await fetch('/api/v1/templates', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': workerSession.csrf },
+                    body: JSON.stringify({ id: t.id, name: t.name, cats: t.cats, parts: t.parts })
+                });
+                if (!r.ok) {
+                    const d = await r.json().catch(() => ({}));
+                    console.warn('ひな形を送れません:', d && d.error);
+                    return false;
+                }
+                return true;
+            } catch (e) { console.warn('ひな形を送れません:', e); return false; }
+        }
+
+        async function dropSharedTemplate(id) {
+            if (!workerSession || !canManageTemplates) return false;
+            try {
+                const r = await fetch('/api/v1/templates/' + encodeURIComponent(id), {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                    headers: { 'X-CSRF-Token': workerSession.csrf }
+                });
+                return r.ok;
+            } catch (e) { return false; }
+        }
 
         function renderItemToCanvas(itemObj, dim) {
             const size = OUT_DIM;   // 常に 1200x1200
@@ -8257,6 +9922,789 @@
 
         confirmBtn.addEventListener('click', confirmAndNext);
         undoBtn.addEventListener('click', undo);
+    </script>
+
+    <script>
+    // 共通セキュリティ基盤の画面。名前がぶつからないよう包んである。
+    (function () {
+"use strict";
+
+const API = Object.freeze({
+  status: "/api/v1/status",
+  registerOptions: "/api/v1/auth/register/options",
+  registerVerify: "/api/v1/auth/register/verify",
+  loginOptions: "/api/v1/auth/login/options",
+  loginVerify: "/api/v1/auth/login/verify",
+  me: "/api/v1/me",
+  logout: "/api/v1/auth/logout",
+  invitations: "/api/v1/admin/invitations",
+  records: "/api/v1/records",
+  audit: "/api/v1/audit",
+  auditVerify: "/api/v1/audit/verify",
+});
+
+const state = {
+  csrfToken: "",
+  user: null,
+  memberships: [],
+};
+
+const elements = {
+  flash: document.querySelector("#flash"),
+  backendStatus: document.querySelector("#backend-status"),
+  backendVersion: document.querySelector("#backend-version"),
+  backendStatusDot: document.querySelector("#backend-status-dot"),
+  checkStatusButton: document.querySelector("#check-status-button"),
+  signedOutSection: document.querySelector("#signed-out-section"),
+  signedInSection: document.querySelector("#signed-in-section"),
+  registrationForm: document.querySelector("#registration-form"),
+  registrationToken: document.querySelector("#registration-token"),
+  bootstrapEmail: document.querySelector("#bootstrap-email"),
+  bootstrapDisplayName: document.querySelector("#bootstrap-display-name"),
+  bootstrapCenterCode: document.querySelector("#bootstrap-center-code"),
+  registrationButton: document.querySelector("#registration-button"),
+  loginButton: document.querySelector("#login-button"),
+  passkeySupport: document.querySelector("#passkey-support"),
+  refreshMeButton: document.querySelector("#refresh-me-button"),
+  logoutButton: document.querySelector("#logout-button"),
+  identityDetails: document.querySelector("#identity-details"),
+  csrfValue: document.querySelector("#csrf-value"),
+  recordForm: document.querySelector("#record-form"),
+  recordCenterId: document.querySelector("#record-center-id"),
+  recordTitle: document.querySelector("#record-title"),
+  recordSecret: document.querySelector("#record-secret"),
+  createRecordButton: document.querySelector("#create-record-button"),
+  listRecordsButton: document.querySelector("#list-records-button"),
+  recordsEmpty: document.querySelector("#records-empty"),
+  recordsList: document.querySelector("#records-list"),
+  adminPanel: document.querySelector("#admin-panel"),
+  inviteForm: document.querySelector("#invite-form"),
+  inviteEmail: document.querySelector("#invite-email"),
+  inviteDisplayName: document.querySelector("#invite-display-name"),
+  inviteCenterCode: document.querySelector("#invite-center-code"),
+  inviteRole: document.querySelector("#invite-role"),
+  createInviteButton: document.querySelector("#create-invite-button"),
+  inviteResult: document.querySelector("#invite-result"),
+  inviteUrl: document.querySelector("#invite-url"),
+  inviteToken: document.querySelector("#invite-token"),
+  inviteExpires: document.querySelector("#invite-expires"),
+  auditCenterId: document.querySelector("#audit-center-id"),
+  listAuditButton: document.querySelector("#list-audit-button"),
+  verifyAuditButton: document.querySelector("#verify-audit-button"),
+  auditVerification: document.querySelector("#audit-verification"),
+  auditRows: document.querySelector("#audit-rows"),
+};
+
+class ApiError extends Error {
+  constructor(message, { status = 0, code = "UNKNOWN", requestId = "" } = {}) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.requestId = requestId;
+  }
+}
+
+function bytesToBase64url(value) {
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function base64urlToBytes(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]*$/u.test(value)) {
+    throw new TypeError("WebAuthnデータのbase64url形式が不正です。");
+  }
+
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const binary = atob(value.replaceAll("-", "+").replaceAll("_", "/") + padding);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function registrationOptionsFromJson(options) {
+  if (!options || typeof options !== "object") {
+    throw new TypeError("登録オプションを取得できませんでした。");
+  }
+
+  if (!options.user || typeof options.user.id !== "string") {
+    throw new TypeError("登録オプションの利用者IDが不正です。");
+  }
+
+  return {
+    ...options,
+    challenge: base64urlToBytes(options.challenge),
+    user: {
+      ...options.user,
+      id: base64urlToBytes(options.user.id),
+    },
+    excludeCredentials: (options.excludeCredentials ?? []).map((credential) => ({
+      ...credential,
+      id: base64urlToBytes(credential.id),
+    })),
+  };
+}
+
+function authenticationOptionsFromJson(options) {
+  if (!options || typeof options !== "object") {
+    throw new TypeError("ログインオプションを取得できませんでした。");
+  }
+
+  return {
+    ...options,
+    challenge: base64urlToBytes(options.challenge),
+    allowCredentials: (options.allowCredentials ?? []).map((credential) => ({
+      ...credential,
+      id: base64urlToBytes(credential.id),
+    })),
+  };
+}
+
+function credentialToJson(credential) {
+  const response = credential.response;
+  const json = {
+    id: credential.id,
+    rawId: bytesToBase64url(credential.rawId),
+    type: credential.type,
+    response: {
+      clientDataJSON: bytesToBase64url(response.clientDataJSON),
+    },
+    clientExtensionResults: credential.getClientExtensionResults(),
+    authenticatorAttachment: credential.authenticatorAttachment ?? undefined,
+  };
+
+  if (response instanceof AuthenticatorAttestationResponse) {
+    json.response.attestationObject = bytesToBase64url(response.attestationObject);
+
+    if (typeof response.getTransports === "function") {
+      json.response.transports = response.getTransports();
+    }
+
+    if (typeof response.getPublicKeyAlgorithm === "function") {
+      json.response.publicKeyAlgorithm = response.getPublicKeyAlgorithm();
+    }
+
+    if (typeof response.getPublicKey === "function") {
+      const publicKey = response.getPublicKey();
+      if (publicKey) {
+        json.response.publicKey = bytesToBase64url(publicKey);
+      }
+    }
+  } else if (response instanceof AuthenticatorAssertionResponse) {
+    json.response.authenticatorData = bytesToBase64url(response.authenticatorData);
+    json.response.signature = bytesToBase64url(response.signature);
+    json.response.userHandle = response.userHandle ? bytesToBase64url(response.userHandle) : null;
+  } else {
+    throw new TypeError("ブラウザから予期しないパスキー応答が返されました。");
+  }
+
+  return json;
+}
+
+async function apiRequest(path, { method = "GET", body, requiresCsrf = false } = {}) {
+  const headers = new Headers({ Accept: "application/json" });
+
+  if (body !== undefined) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (requiresCsrf) {
+    if (!state.csrfToken) {
+      throw new ApiError("CSRFトークンがありません。セッションを再取得してください。", {
+        code: "MISSING_CSRF_TOKEN",
+      });
+    }
+    headers.set("X-CSRF-Token", state.csrfToken);
+  }
+
+  let response;
+  try {
+    response = await fetch(path, {
+      method,
+      credentials: "include",
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (error) {
+    throw new ApiError("サーバーに接続できません。通信状態と起動状況を確認してください。", {
+      code: "NETWORK_ERROR",
+    });
+  }
+
+  let payload = null;
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      payload = await response.json();
+    } catch {
+      throw new ApiError("サーバーから壊れたJSON応答が返されました。", {
+        status: response.status,
+        code: "INVALID_JSON_RESPONSE",
+      });
+    }
+  }
+
+  if (!response.ok) {
+    const apiError = payload?.error;
+    throw new ApiError(apiError?.message || `サーバーエラーが発生しました（HTTP ${response.status}）。`, {
+      status: response.status,
+      code: apiError?.code || "HTTP_ERROR",
+      requestId: apiError?.request_id || "",
+    });
+  }
+
+  if (payload === null) {
+    throw new ApiError("サーバーからJSON応答が返されませんでした。", {
+      status: response.status,
+      code: "MISSING_JSON_RESPONSE",
+    });
+  }
+
+  return payload;
+}
+
+function showFlash(message, type = "success") {
+  elements.flash.textContent = message;
+  elements.flash.className = `flash${type === "success" ? "" : ` flash--${type}`}`;
+  elements.flash.hidden = false;
+  elements.flash.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function clearFlash() {
+  elements.flash.hidden = true;
+  elements.flash.textContent = "";
+  elements.flash.className = "flash";
+}
+
+function showError(error, context) {
+  const message = error instanceof Error ? error.message : "不明なエラーが発生しました。";
+  const requestId = error instanceof ApiError && error.requestId ? `（問い合わせID: ${error.requestId}）` : "";
+  showFlash(`${context}: ${message}${requestId}`, "error");
+  console.error(context, error);
+}
+
+async function withBusy(button, busyLabel, operation) {
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = busyLabel;
+  clearFlash();
+
+  try {
+    return await operation();
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+function appendDetail(list, label, value) {
+  const wrapper = document.createElement("div");
+  const term = document.createElement("dt");
+  const description = document.createElement("dd");
+  term.textContent = label;
+  description.textContent = value || "—";
+  wrapper.append(term, description);
+  list.append(wrapper);
+}
+
+function hasAdminRole(memberships) {
+  return memberships.some((membership) => membership?.role === "admin");
+}
+
+function formatMembership(membership) {
+  const center = membership.center_code || membership.center_id || "センター不明";
+  return `${center} / ${membership.role || "権限不明"}`;
+}
+
+function renderSession({ user, memberships, csrf_token: csrfToken }) {
+  state.user = user ?? null;
+  state.memberships = Array.isArray(memberships) ? memberships : [];
+  state.csrfToken = typeof csrfToken === "string" ? csrfToken : "";
+
+  elements.identityDetails.replaceChildren();
+  appendDetail(elements.identityDetails, "表示名", user?.display_name || user?.name || "—");
+  appendDetail(elements.identityDetails, "メール", user?.email || "—");
+  appendDetail(elements.identityDetails, "利用者ID", user?.id || user?.user_id || "—");
+  appendDetail(
+    elements.identityDetails,
+    "所属・権限",
+    state.memberships.length > 0 ? state.memberships.map(formatMembership).join("、") : "所属なし",
+  );
+  appendDetail(elements.identityDetails, "認証方式", "Passkey / WebAuthn");
+  appendDetail(elements.identityDetails, "セッション", state.csrfToken ? "有効" : "CSRF未取得");
+
+  elements.csrfValue.textContent = state.csrfToken || "未取得";
+  elements.signedOutSection.hidden = true;
+  elements.signedInSection.hidden = false;
+  elements.adminPanel.hidden = !hasAdminRole(state.memberships);
+
+  seedCenterFields(state.memberships);
+}
+
+function renderSignedOut() {
+  state.csrfToken = "";
+  state.user = null;
+  state.memberships = [];
+  elements.csrfValue.textContent = "未取得";
+  elements.identityDetails.replaceChildren();
+  elements.signedInSection.hidden = true;
+  elements.signedOutSection.hidden = false;
+  elements.adminPanel.hidden = true;
+  elements.inviteResult.hidden = true;
+}
+
+function seedCenterFields(memberships) {
+  const firstMembership = memberships[0];
+  const centerId = firstMembership?.center_id;
+  const centerCode = firstMembership?.center_code;
+
+  if (centerId && !elements.recordCenterId.value) {
+    elements.recordCenterId.value = centerId;
+  }
+  if (centerId && !elements.auditCenterId.value) {
+    elements.auditCenterId.value = centerId;
+  }
+  if (centerCode && !elements.inviteCenterCode.value) {
+    elements.inviteCenterCode.value = centerCode;
+  }
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  }).format(date);
+}
+
+async function checkStatus() {
+  elements.backendStatus.textContent = "確認中";
+  elements.backendVersion.textContent = "—";
+  elements.backendStatusDot.className = "status-dot status-dot--pending";
+
+  try {
+    const result = await apiRequest(API.status);
+    if (result.ok !== true) {
+      throw new ApiError("バックエンドが正常状態を返しませんでした。", { code: "UNHEALTHY" });
+    }
+    elements.backendStatus.textContent = "稼働中";
+    elements.backendVersion.textContent = `${result.service || "service"} / ${result.version || "version unknown"}`;
+    elements.backendStatusDot.className = "status-dot status-dot--online";
+  } catch (error) {
+    elements.backendStatus.textContent = "接続できません";
+    elements.backendVersion.textContent = error instanceof Error ? error.message : "状態確認に失敗";
+    elements.backendStatusDot.className = "status-dot status-dot--offline";
+    throw error;
+  }
+}
+
+function ensureWebAuthn() {
+  if (!window.PublicKeyCredential || !navigator.credentials) {
+    throw new Error("このブラウザはパスキーに対応していません。対応ブラウザをHTTPSで開いてください。");
+  }
+}
+
+async function registerPasskey(token) {
+  ensureWebAuthn();
+  const optionResult = await apiRequest(API.registerOptions, {
+    method: "POST",
+    body: {
+      token,
+      email: elements.bootstrapEmail.value.trim() || undefined,
+      display_name: elements.bootstrapDisplayName.value.trim() || undefined,
+      center_code: elements.bootstrapCenterCode.value.trim().toUpperCase() || undefined,
+    },
+  });
+  const publicKey = registrationOptionsFromJson(optionResult.options);
+
+  let credential;
+  try {
+    credential = await navigator.credentials.create({ publicKey });
+  } catch (error) {
+    if (error?.name === "NotAllowedError") {
+      throw new Error("パスキー登録がキャンセルされたか、時間切れになりました。");
+    }
+    throw error;
+  }
+
+  if (!(credential instanceof PublicKeyCredential)) {
+    throw new Error("パスキーを作成できませんでした。");
+  }
+
+  const result = await apiRequest(API.registerVerify, {
+    method: "POST",
+    body: {
+      ceremony_id: optionResult.ceremony_id,
+      response: credentialToJson(credential),
+    },
+  });
+
+  if (result.verified !== true) {
+    throw new Error("サーバーがパスキー登録を検証できませんでした。");
+  }
+
+  renderSession(result);
+}
+
+async function loginWithPasskey() {
+  ensureWebAuthn();
+  const optionResult = await apiRequest(API.loginOptions, {
+    method: "POST",
+    body: {},
+  });
+  const publicKey = authenticationOptionsFromJson(optionResult.options);
+
+  let credential;
+  try {
+    credential = await navigator.credentials.get({ publicKey });
+  } catch (error) {
+    if (error?.name === "NotAllowedError") {
+      throw new Error("ログインがキャンセルされたか、使用できるパスキーがありません。");
+    }
+    throw error;
+  }
+
+  if (!(credential instanceof PublicKeyCredential)) {
+    throw new Error("パスキー認証情報を取得できませんでした。");
+  }
+
+  const result = await apiRequest(API.loginVerify, {
+    method: "POST",
+    body: {
+      ceremony_id: optionResult.ceremony_id,
+      response: credentialToJson(credential),
+    },
+  });
+
+  if (result.verified !== true) {
+    throw new Error("サーバーがパスキー認証を検証できませんでした。");
+  }
+
+  renderSession(result);
+}
+
+async function loadMe({ announce = false } = {}) {
+  try {
+    const result = await apiRequest(API.me);
+    if (result.authenticated !== true) {
+      throw new ApiError("認証済みセッションではありません。", {
+        status: 401,
+        code: "NOT_AUTHENTICATED",
+      });
+    }
+    renderSession(result);
+    if (announce) showFlash("セッション情報を更新しました。");
+    return true;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      renderSignedOut();
+      if (announce) showFlash("セッションの有効期限が切れています。もう一度ログインしてください。", "warning");
+      return false;
+    }
+    if (announce) showError(error, "セッション取得に失敗しました");
+    return false;
+  }
+}
+
+function renderRecords(records) {
+  elements.recordsList.replaceChildren();
+  const safeRecords = Array.isArray(records) ? records : [];
+  elements.recordsEmpty.hidden = safeRecords.length > 0;
+  if (safeRecords.length === 0) {
+    elements.recordsEmpty.textContent = "このセンターの記録はありません。";
+    return;
+  }
+
+  for (const record of safeRecords) {
+    const article = document.createElement("article");
+    article.className = "record-card";
+    const title = document.createElement("h4");
+    title.textContent = record.title || "無題の記録";
+    const secret = document.createElement("p");
+    secret.textContent = record.secret || "";
+    const meta = document.createElement("div");
+    meta.className = "record-meta";
+
+    for (const value of [
+      `ID: ${record.id || record.record_id || "—"}`,
+      `作成: ${formatDate(record.created_at)}`,
+      record.created_by ? `作成者: ${record.created_by}` : "",
+    ]) {
+      if (!value) continue;
+      const span = document.createElement("span");
+      span.textContent = value;
+      meta.append(span);
+    }
+
+    article.append(title, secret, meta);
+    elements.recordsList.append(article);
+  }
+}
+
+async function listRecords() {
+  const centerId = elements.recordCenterId.value.trim();
+  if (!centerId) {
+    elements.recordCenterId.focus();
+    throw new Error("センターIDを入力してください。");
+  }
+
+  const query = new URLSearchParams({ center_id: centerId });
+  const result = await apiRequest(`${API.records}?${query}`);
+  renderRecords(result.records);
+}
+
+async function createRecord() {
+  const payload = {
+    center_id: elements.recordCenterId.value.trim(),
+    title: elements.recordTitle.value.trim(),
+    secret: elements.recordSecret.value,
+  };
+  const result = await apiRequest(API.records, {
+    method: "POST",
+    body: payload,
+    requiresCsrf: true,
+  });
+  elements.recordTitle.value = "";
+  elements.recordSecret.value = "";
+  await listRecords();
+  return result.record;
+}
+
+async function createInvitation() {
+  const result = await apiRequest(API.invitations, {
+    method: "POST",
+    requiresCsrf: true,
+    body: {
+      email: elements.inviteEmail.value.trim(),
+      display_name: elements.inviteDisplayName.value.trim(),
+      center_code: elements.inviteCenterCode.value.trim().toUpperCase(),
+      role: elements.inviteRole.value,
+    },
+  });
+
+  elements.inviteUrl.textContent = result.enrollment_url || "—";
+  elements.inviteUrl.href = result.enrollment_url || "#";
+  elements.inviteToken.textContent = result.invite_token || "—";
+  elements.inviteExpires.textContent = formatDate(result.expires_at);
+  elements.inviteResult.hidden = false;
+  return result;
+}
+
+function auditEventValue(event, keys, fallback = "—") {
+  for (const key of keys) {
+    const value = event?.[key];
+    if (value !== undefined && value !== null && value !== "") return String(value);
+  }
+  return fallback;
+}
+
+function renderAuditEvents(events) {
+  elements.auditRows.replaceChildren();
+  const safeEvents = Array.isArray(events) ? events : [];
+
+  if (safeEvents.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.className = "empty-cell";
+    cell.textContent = "このセンターの監査イベントはありません。";
+    row.append(cell);
+    elements.auditRows.append(row);
+    return;
+  }
+
+  for (const event of safeEvents) {
+    const payload = event?.payload && typeof event.payload === "object" ? event.payload : event;
+    const row = document.createElement("tr");
+    const values = [
+      formatDate(
+        auditEventValue(payload, ["occurred_at", "timestamp"], auditEventValue(event, ["created_at"], "")),
+      ),
+      auditEventValue(payload, ["action", "event_type", "type"]),
+      auditEventValue(payload, ["actor_display_name", "actor_user_id", "actor_id", "user_id"]),
+      auditEventValue(payload, ["target_type", "resource_type", "resource_id", "target_id"]),
+      auditEventValue(event, ["id", "event_id"]),
+    ];
+
+    for (const value of values) {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    }
+    elements.auditRows.append(row);
+  }
+}
+
+function requiredAuditCenterId() {
+  const centerId = elements.auditCenterId.value.trim();
+  if (!centerId) {
+    elements.auditCenterId.focus();
+    throw new Error("監査対象のセンターIDを入力してください。");
+  }
+  return centerId;
+}
+
+async function listAudit() {
+  const query = new URLSearchParams({ center_id: requiredAuditCenterId(), limit: "100" });
+  const result = await apiRequest(`${API.audit}?${query}`);
+  renderAuditEvents(result.events);
+  return result.events;
+}
+
+async function verifyAudit() {
+  const result = await apiRequest(API.auditVerify, {
+    method: "POST",
+    requiresCsrf: true,
+    body: { center_id: requiredAuditCenterId() },
+  });
+
+  const errors = Array.isArray(result.errors) ? result.errors : [];
+  elements.auditVerification.replaceChildren();
+  elements.auditVerification.className = `verification-result${result.valid ? "" : " verification-result--invalid"}`;
+
+  const heading = document.createElement("strong");
+  heading.textContent = result.valid ? "監査チェーンは有効です" : "監査チェーンに不整合があります";
+  const summary = document.createElement("p");
+  summary.textContent = `${Number(result.checked) || 0}件を検証 / エラー ${errors.length}件`;
+  elements.auditVerification.append(heading, summary);
+
+  if (errors.length > 0) {
+    const list = document.createElement("ul");
+    for (const error of errors) {
+      const item = document.createElement("li");
+      item.textContent = typeof error === "string" ? error : JSON.stringify(error);
+      list.append(item);
+    }
+    elements.auditVerification.append(list);
+  }
+
+  elements.auditVerification.hidden = false;
+  return result;
+}
+
+elements.checkStatusButton.addEventListener("click", () => {
+  withBusy(elements.checkStatusButton, "確認中…", checkStatus).catch((error) => showError(error, "状態確認に失敗しました"));
+});
+
+elements.registrationForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!elements.registrationForm.reportValidity()) return;
+  const token = elements.registrationToken.value.trim();
+
+  withBusy(elements.registrationButton, "登録処理中…", async () => {
+    await registerPasskey(token);
+    elements.registrationToken.value = "";
+    elements.bootstrapEmail.value = "";
+    elements.bootstrapDisplayName.value = "";
+    showFlash("パスキーを登録し、ログインしました。");
+  }).catch((error) => showError(error, "パスキー登録に失敗しました"));
+});
+
+elements.loginButton.addEventListener("click", () => {
+  withBusy(elements.loginButton, "認証中…", async () => {
+    await loginWithPasskey();
+    showFlash("ログインしました。");
+  }).catch((error) => showError(error, "ログインに失敗しました"));
+});
+
+elements.refreshMeButton.addEventListener("click", () => {
+  withBusy(elements.refreshMeButton, "取得中…", () => loadMe({ announce: true }));
+});
+
+elements.logoutButton.addEventListener("click", () => {
+  withBusy(elements.logoutButton, "処理中…", async () => {
+    await apiRequest(API.logout, { method: "POST", body: {}, requiresCsrf: true });
+    renderSignedOut();
+    showFlash("ログアウトしました。");
+  }).catch((error) => showError(error, "ログアウトに失敗しました"));
+});
+
+elements.recordForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!elements.recordForm.reportValidity()) return;
+
+  withBusy(elements.createRecordButton, "作成中…", async () => {
+    await createRecord();
+    showFlash("暗号化デモ記録を作成しました。");
+  }).catch((error) => showError(error, "記録作成に失敗しました"));
+});
+
+elements.listRecordsButton.addEventListener("click", () => {
+  withBusy(elements.listRecordsButton, "取得中…", async () => {
+    await listRecords();
+    showFlash("記録一覧を更新しました。");
+  }).catch((error) => showError(error, "記録一覧の取得に失敗しました"));
+});
+
+elements.inviteForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!elements.inviteForm.reportValidity()) return;
+
+  withBusy(elements.createInviteButton, "発行中…", async () => {
+    await createInvitation();
+    showFlash("招待を発行しました。表示された情報を安全な経路で本人に渡してください。");
+  }).catch((error) => showError(error, "招待発行に失敗しました"));
+});
+
+elements.listAuditButton.addEventListener("click", () => {
+  withBusy(elements.listAuditButton, "取得中…", async () => {
+    await listAudit();
+    showFlash("監査ログを取得しました。");
+  }).catch((error) => showError(error, "監査ログ取得に失敗しました"));
+});
+
+elements.verifyAuditButton.addEventListener("click", () => {
+  withBusy(elements.verifyAuditButton, "検証中…", async () => {
+    const result = await verifyAudit();
+    showFlash(
+      result.valid ? "監査チェーンの整合性を確認しました。" : "監査チェーンに不整合が見つかりました。",
+      result.valid ? "success" : "error",
+    );
+  }).catch((error) => showError(error, "監査チェーン検証に失敗しました"));
+});
+
+async function describePasskeySupport() {
+  if (!window.PublicKeyCredential || !navigator.credentials) {
+    elements.passkeySupport.textContent = "このブラウザはパスキーに対応していません。";
+    elements.registrationButton.disabled = true;
+    elements.loginButton.disabled = true;
+    return;
+  }
+
+  try {
+    const available = typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === "function"
+      ? await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+      : null;
+    elements.passkeySupport.textContent = available === false
+      ? "外部セキュリティキー、または別端末のパスキーを利用できます。"
+      : "このブラウザはパスキーに対応しています。";
+  } catch {
+    elements.passkeySupport.textContent = "パスキー対応ブラウザです。利用可否は登録時に確認します。";
+  }
+}
+
+async function initialize() {
+  renderSignedOut();
+  const fragment = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
+  const invite = fragment.get("invite");
+  if (invite) {
+    elements.registrationToken.value = invite;
+    history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  }
+  await Promise.allSettled([checkStatus(), describePasskeySupport()]);
+  await loadMe();
+}
+
+initialize().catch((error) => showError(error, "画面の初期化に失敗しました"));
+
+    })();
     </script>
 </body>
 </html>
